@@ -8,7 +8,7 @@ const router = express.Router();
 
 // Ruta de Registro de Usuario
 router.post('/register', async (req, res) => {
-  const { name, identification, major, role, password, tutor_id } = req.body;
+  const { name, identification, major, role, password, tutor_id, project_title, project_community, tutor_type } = req.body;
 
   if (!name || !identification || !major || !role || !password) {
     return res.status(400).json({ error: 'Todos los campos (name, identification, major, role, password) son obligatorios.' });
@@ -21,15 +21,51 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'La cédula ingresada ya está registrada.' });
     }
 
+    // Lógica para estudiantes: buscar o crear current_projects
+    let project_id = null;
+    if (role === 'student') {
+      if (!project_title || !project_community) {
+        return res.status(400).json({ error: 'Para registrar un estudiante se requiere el título del proyecto y la comunidad.' });
+      }
+
+      // Buscar si existe proyecto coincidente
+      const projectRes = await db.query(
+        'SELECT id FROM current_projects WHERE LOWER(title) = LOWER($1) AND LOWER(community_name) = LOWER($2)',
+        [project_title.trim(), project_community.trim()]
+      );
+
+      if (projectRes.rowCount > 0) {
+        project_id = projectRes.rows[0].id;
+      } else {
+        // Crear nuevo proyecto actual
+        const newProjRes = await db.query(
+          'INSERT INTO current_projects (title, community_name) VALUES ($1, $2) RETURNING id',
+          [project_title.trim(), project_community.trim()]
+        );
+        project_id = newProjRes.rows[0].id;
+      }
+    }
+
     // Hashear la contraseña
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    // Insertar en la base de datos
+    // Insertar usuario
     const result = await db.query(
-      `INSERT INTO users (name, identification, major, role, password_hash, tutor_id) 
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, identification, major, role, active`,
-      [name, identification, major, role, passwordHash, tutor_id ? parseInt(tutor_id) : null]
+      `INSERT INTO users (name, identification, major, role, password_hash, tutor_id, project_id, docs_submitted, tutor_type) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
+       RETURNING id, name, identification, major, role, active, project_id, docs_submitted, tutor_type`,
+      [
+        name,
+        identification,
+        major,
+        role,
+        passwordHash,
+        tutor_id ? parseInt(tutor_id) : null,
+        project_id,
+        false,
+        role === 'tutor' ? tutor_type : null
+      ]
     );
 
     res.status(201).json(result.rows[0]);
@@ -72,7 +108,10 @@ router.post('/login', async (req, res) => {
       name: user.name,
       identification: user.identification,
       major: user.major,
-      role: user.role
+      role: user.role,
+      project_id: user.project_id,
+      docs_submitted: user.docs_submitted,
+      tutor_type: user.tutor_type
     };
 
     const token = jwt.sign(
@@ -89,7 +128,10 @@ router.post('/login', async (req, res) => {
         name: user.name,
         identification: user.identification,
         major: user.major,
-        role: user.role
+        role: user.role,
+        project_id: user.project_id,
+        docs_submitted: user.docs_submitted,
+        tutor_type: user.tutor_type
       }
     });
 
@@ -102,7 +144,7 @@ router.post('/login', async (req, res) => {
 router.get('/me', verifyToken, async (req, res) => {
   try {
     const result = await db.query(
-      'SELECT id, name, identification, major, role, active, tutor_id FROM users WHERE id = $1',
+      'SELECT id, name, identification, major, role, active, tutor_id, project_id, docs_submitted, tutor_type FROM users WHERE id = $1',
       [req.user.id]
     );
 

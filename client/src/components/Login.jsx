@@ -3,7 +3,8 @@ import React, { useState } from 'react';
 const API_BASE = 'http://localhost:5000/api';
 
 export default function Login({ onLoginSuccess }) {
-  const [identification, setIdentification] = useState('');
+  const [docType, setDocType] = useState('V');
+  const [docNumber, setDocNumber] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -13,11 +14,13 @@ export default function Login({ onLoginSuccess }) {
     setError('');
     setLoading(true);
 
-    if (!identification.trim() || !password.trim()) {
+    if (!docNumber.trim() || !password.trim()) {
       setError('Por favor complete todos los campos.');
       setLoading(false);
       return;
     }
+
+    const identification = `${docType}-${docNumber.trim()}`;
 
     try {
       const response = await fetch(`${API_BASE}/auth/login`, {
@@ -26,7 +29,7 @@ export default function Login({ onLoginSuccess }) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          identification: identification.trim(),
+          identification,
           password: password.trim(),
         }),
       });
@@ -165,33 +168,55 @@ export default function Login({ onLoginSuccess }) {
         <form onSubmit={handleSubmit} style={{ textAlign: 'left' }}>
           <div className="form-group" style={{ marginBottom: '1.5rem' }}>
             <label className="form-label" style={{ color: '#E2E8F0', fontSize: '0.85rem', letterSpacing: '0.5px' }}>
-              CÉDULA DE IDENTIDAD
+              DOCUMENTO DE IDENTIDAD
             </label>
-            <div style={{ position: 'relative' }}>
-              <i className="fa-solid fa-id-card" style={{
-                position: 'absolute',
-                left: '1rem',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                color: 'rgba(255, 255, 255, 0.5)',
-                fontSize: '1.1rem'
-              }}></i>
-              <input
-                type="text"
-                placeholder="Ej. V-25123456"
-                value={identification}
-                onChange={(e) => setIdentification(e.target.value)}
+            <div style={{ display: 'flex', gap: '0.5rem', position: 'relative' }}>
+              <select
+                value={docType}
+                onChange={(e) => setDocType(e.target.value)}
                 className="form-control"
                 style={{
-                  width: '100%',
-                  paddingLeft: '2.8rem',
+                  width: '80px',
                   background: 'rgba(255, 255, 255, 0.08)',
                   border: '1.5px solid rgba(255, 255, 255, 0.15)',
                   color: 'white',
-                  borderRadius: '12px'
+                  borderRadius: '12px',
+                  cursor: 'pointer',
+                  textAlign: 'center',
+                  paddingLeft: '0.5rem',
+                  paddingRight: '0.5rem'
                 }}
-                required
-              />
+              >
+                <option value="V" style={{ color: 'var(--slate-dark)' }}>V</option>
+                <option value="E" style={{ color: 'var(--slate-dark)' }}>E</option>
+                <option value="P" style={{ color: 'var(--slate-dark)' }}>P</option>
+              </select>
+              <div style={{ position: 'relative', flex: 1 }}>
+                <i className="fa-solid fa-id-card" style={{
+                  position: 'absolute',
+                  left: '1rem',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: 'rgba(255, 255, 255, 0.5)',
+                  fontSize: '1.1rem'
+                }}></i>
+                <input
+                  type="number"
+                  placeholder="Número de cédula"
+                  value={docNumber}
+                  onChange={(e) => setDocNumber(e.target.value)}
+                  className="form-control"
+                  style={{
+                    width: '100%',
+                    paddingLeft: '2.8rem',
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    border: '1.5px solid rgba(255, 255, 255, 0.15)',
+                    color: 'white',
+                    borderRadius: '12px'
+                  }}
+                  required
+                />
+              </div>
             </div>
           </div>
 

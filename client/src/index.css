@@ -400,3 +400,156 @@ h1, h2, h3, h4, h5, h6 {
     color: #666;
   }
 }
+
+/* --- ESTILOS RESPONSIVOS PARA EL HEADER --- */
+.app-header {
+  background: rgba(12, 35, 64, 0.96);
+  backdrop-filter: blur(10px);
+  border-bottom: 3px solid var(--unefa-gold);
+  color: white;
+  padding: 0.8rem 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+}
+
+.hamburger-btn {
+  display: none;
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+  outline: none;
+}
+
+.header-nav {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .app-header {
+    padding: 0.8rem 1.2rem;
+  }
+
+  .hamburger-btn {
+    display: block;
+  }
+
+  .header-nav {
+    display: none;
+    flex-direction: column;
+    width: 100%;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background: rgba(12, 35, 64, 0.98);
+    border-bottom: 2px solid var(--unefa-gold);
+    padding: 1.5rem;
+    gap: 1.2rem;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+    align-items: stretch;
+    text-align: center;
+  }
+
+  .header-nav.nav-open {
+    display: flex;
+  }
+
+  .header-nav > div {
+    text-align: center !important;
+  }
+
+  .header-nav button {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  /* Separador vertical oculto en móvil */
+  .header-nav > div[style*="width: 1px"] {
+    display: none;
+  }
+}
+
+/* --- TABLAS RESPONSIVAS MOBILE-FIRST (TARJETAS APILADAS) --- */
+@media (max-width: 768px) {
+  .premium-table-container {
+    border: none;
+  }
+
+  .premium-table, 
+  .premium-table thead, 
+  .premium-table tbody, 
+  .premium-table th, 
+  .premium-table td, 
+  .premium-table tr { 
+    display: block; 
+  }
+  
+  .premium-table thead tr { 
+    position: absolute;
+    top: -9999px;
+    left: -9999px;
+  }
+  
+  .premium-table tr {
+    background: var(--white-translucent);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: var(--radius-md);
+    margin-bottom: 1.2rem;
+    padding: 1rem;
+    box-shadow: var(--shadow-premium);
+  }
+  
+  .premium-table tr:hover {
+    box-shadow: var(--shadow-hover);
+  }
+  
+  .premium-table td { 
+    border: none;
+    border-bottom: 1px solid rgba(226, 232, 240, 0.6); 
+    position: relative;
+    padding-left: 45%; 
+    text-align: right;
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+    min-height: 42px;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+  }
+  
+  .premium-table td:last-child {
+    border-bottom: none;
+    padding-bottom: 0.5rem;
+    justify-content: center;
+    padding-left: 0;
+  }
+  
+  .premium-table td:before { 
+    position: absolute;
+    left: 1rem;
+    width: 40%; 
+    padding-right: 10px; 
+    white-space: nowrap;
+    text-align: left;
+    font-weight: bold;
+    color: var(--unefa-navy);
+    content: attr(data-label);
+    font-family: var(--font-header);
+    font-size: 0.85rem;
+  }
+
+  /* Ajustar grids generales en celulares para que apilen de forma vertical */
+  div[style*="grid-template-columns"] {
+    grid-template-columns: 1fr !important;
+  }
+}
+

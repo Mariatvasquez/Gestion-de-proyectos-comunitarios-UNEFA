@@ -10,15 +10,20 @@ router.get('/asignados', verifyToken, checkRole(['tutor']), async (req, res) => 
   const tutorId = req.user.id;
 
   try {
-    // 1. Obtener estudiantes asignados
+    // 1. Obtener estudiantes asignados con su información de proyecto
     const studentsResult = await db.query(
-      'SELECT id, name, identification, major, active FROM users WHERE tutor_id = $1 AND active = true ORDER BY name ASC',
+      `SELECT u.id, u.name, u.identification, u.major, u.active, u.project_id,
+              cp.title as project_title, cp.community_name as project_community
+       FROM users u
+       LEFT JOIN current_projects cp ON u.project_id = cp.id
+       WHERE u.tutor_id = $1 AND u.active = true 
+       ORDER BY u.name ASC`,
       [tutorId]
     );
     const students = studentsResult.rows;
 
     if (students.length === 0) {
-      return res.json({ students: [], activities: [] });
+      return res.json({ projects: [], activities: [] });
     }
 
     const studentIds = students.map(s => s.id);
@@ -47,8 +52,26 @@ router.get('/asignados', verifyToken, checkRole(['tutor']), async (req, res) => 
       };
     });
 
+    // 4. Agrupar estudiantes por proyecto
+    const projectsMap = {};
+    studentsWithHours.forEach(student => {
+      const pid = student.project_id || 0;
+      const ptitle = student.project_title || 'Sin Proyecto Asignado';
+      const pcomm = student.project_community || 'N/A';
+
+      if (!projectsMap[pid]) {
+        projectsMap[pid] = {
+          id: student.project_id,
+          title: ptitle,
+          community_name: pcomm,
+          students: []
+        };
+      }
+      projectsMap[pid].students.push(student);
+    });
+
     res.json({
-      students: studentsWithHours,
+      projects: Object.values(projectsMap),
       activities
     });
 

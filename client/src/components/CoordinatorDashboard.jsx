@@ -20,11 +20,23 @@ export default function CoordinatorDashboard({ user, token }) {
     major: '',
     role: 'student',
     tutor_id: '',
-    password: '' // Campo opcional, por defecto se usará unefa123 al crear si queda vacío
+    password: '',
+    project_title: '',
+    project_community: '',
+    tutor_type: 'académico',
+    docs_submitted: false
   });
   const [editingUser, setEditingUser] = useState(null);
   const [userFormError, setUserFormError] = useState('');
   const [userFormSuccess, setUserFormSuccess] = useState('');
+  const [expandedCoordProjects, setExpandedCoordProjects] = useState({});
+
+  const toggleCoordProject = (pid) => {
+    setExpandedCoordProjects(prev => ({
+      ...prev,
+      [pid]: !prev[pid]
+    }));
+  };
 
   // Formulario Hito (Add)
   const [milestoneFormData, setMilestoneFormData] = useState({ title: '', event_date: '' });
@@ -114,7 +126,7 @@ export default function CoordinatorDashboard({ user, token }) {
       }
 
       setUserFormSuccess(editingUser ? '✅ Usuario actualizado con éxito.' : `✅ Usuario creado con éxito. Contraseña por defecto: ${submitPassword}`);
-      setUserFormData({ name: '', identification: '', major: '', role: 'student', tutor_id: '', password: '' });
+      setUserFormData({ name: '', identification: '', major: '', role: 'student', tutor_id: '', password: '', project_title: '', project_community: '', tutor_type: 'académico', docs_submitted: false });
       setEditingUser(null);
       loadData();
     } catch (err) {
@@ -141,6 +153,25 @@ export default function CoordinatorDashboard({ user, token }) {
     }
   };
 
+  // Cambiar estado docs_submitted vía PUT
+  const handleToggleDocs = async (studentId, currentStatus) => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/usuarios/${studentId}/docs`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ docs_submitted: !currentStatus })
+      });
+      if (res.ok) {
+        loadData();
+      }
+    } catch (err) {
+      console.error('Error al actualizar documentos:', err);
+    }
+  };
+
   // Cargar usuario para edición
   const handleStartEditUser = (u) => {
     setEditingUser(u);
@@ -150,7 +181,11 @@ export default function CoordinatorDashboard({ user, token }) {
       major: u.major,
       role: u.role,
       tutor_id: u.tutor_id ? u.tutor_id.toString() : '',
-      password: '' // Dejar vacío para no cambiarla a menos que se escriba algo nuevo
+      password: '',
+      project_title: u.project_title || '',
+      project_community: u.project_community || '',
+      tutor_type: u.tutor_type || 'académico',
+      docs_submitted: !!u.docs_submitted
     });
   };
 
@@ -247,6 +282,36 @@ export default function CoordinatorDashboard({ user, token }) {
   });
 
   const tutors = users.filter(u => u.role === 'tutor');
+
+  // Lógica de agrupación en memoria de los estudiantes activos por proyecto comunitario
+  const activeStudentsList = users.filter(u => u.role === 'student' && u.active);
+  const projectsMap = {};
+  activeStudentsList.forEach(student => {
+    const pid = student.project_id || 0;
+    const ptitle = student.project_title || 'Sin Proyecto Asignado';
+    const pcomm = student.project_community || 'N/A';
+
+    if (!projectsMap[pid]) {
+      projectsMap[pid] = {
+        id: student.project_id,
+        title: ptitle,
+        community_name: pcomm,
+        students: []
+      };
+    }
+    
+    const approvedHours = activities
+      .filter(act => act.student_id === student.id && act.status === 'approved')
+      .reduce((sum, act) => sum + act.hours_spent, 0);
+
+    projectsMap[pid].students.push({
+      ...student,
+      approvedHours,
+      progressPercentage: Math.min(Math.round((approvedHours / 120) * 100), 100)
+    });
+  });
+
+  const projectsList = Object.values(projectsMap);
 
   if (loading) {
     return (
@@ -379,6 +444,145 @@ export default function CoordinatorDashboard({ user, token }) {
           </div>
         </div>
 
+        {/* SECCIÓN DE MONITOREO DE PROYECTOS COMUNITARIOS ACTIVOS */}
+        <div className="no-print" style={{ marginBottom: '2rem' }}>
+          <div className="glass-panel" style={{ padding: '1.8rem', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--unefa-navy)' }}>
+              <i className="fa-solid fa-folder-tree" style={{ color: 'var(--unefa-gold)' }}></i>
+              Monitoreo de Proyectos Comunitarios Activos
+            </h3>
+            
+            {projectsList.length === 0 ? (
+              <p style={{ fontSize: '0.9rem', opacity: 0.7, textAlign: 'center', padding: '1rem' }}>No hay proyectos comunitarios activos registrados.</p>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.2rem' }}>
+                {projectsList.map(project => {
+                  const pid = project.id || 0;
+                  const isExpanded = !!expandedCoordProjects[pid];
+                  
+                  return (
+                    <div 
+                      key={pid} 
+                      style={{ 
+                        background: 'white', 
+                        border: '1px solid #E2E8F0', 
+                        borderRadius: '12px', 
+                        overflow: 'hidden', 
+                        boxShadow: '0 2px 5px rgba(0,0,0,0.01)' 
+                      }}
+                    >
+                      {/* Cabecera de Proyecto */}
+                      <div 
+                        onClick={() => toggleCoordProject(pid)}
+                        style={{
+                          background: 'rgba(12, 35, 64, 0.02)',
+                          padding: '0.9rem 1.1rem',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          cursor: 'pointer',
+                          borderBottom: isExpanded ? '1px solid #E2E8F0' : 'none'
+                        }}
+                      >
+                        <div style={{ textAlign: 'left', flex: 1, paddingRight: '0.5rem' }}>
+                          <h4 style={{ fontSize: '0.88rem', color: 'var(--unefa-navy)', fontWeight: 700, margin: 0, lineHeight: 1.3 }}>
+                            {project.title}
+                          </h4>
+                          <span style={{ fontSize: '0.7rem', opacity: 0.7, display: 'block', marginTop: '0.1rem' }}>
+                            Comunidad: {project.community_name}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span style={{ fontSize: '0.65rem', background: 'var(--unefa-navy)', color: 'white', padding: '0.15rem 0.4rem', borderRadius: '10px', fontWeight: 'bold' }}>
+                            {project.students.length} Est.
+                          </span>
+                          <i 
+                            className={`fa-solid ${isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'}`} 
+                            style={{ color: 'var(--unefa-gold)', fontSize: '0.8rem' }}
+                          ></i>
+                        </div>
+                      </div>
+
+                      {/* Lista de Estudiantes del Proyecto al expandir */}
+                      {isExpanded && (
+                        <div style={{ padding: '0.8rem', background: '#FAFBFD', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                          {project.students.length === 0 ? (
+                            <p style={{ fontSize: '0.75rem', opacity: 0.6, padding: '0.5rem', textAlign: 'center' }}>No hay estudiantes asignados.</p>
+                          ) : (
+                            project.students.map(student => (
+                              <div 
+                                key={student.id} 
+                                style={{ 
+                                  background: 'white', 
+                                  border: '1px solid #E2E8F0', 
+                                  borderRadius: '8px', 
+                                  padding: '0.75rem', 
+                                  display: 'flex', 
+                                  flexDirection: 'column', 
+                                  gap: '0.4rem' 
+                                }}
+                              >
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <div style={{ textAlign: 'left' }}>
+                                    <h5 style={{ fontSize: '0.82rem', color: 'var(--unefa-navy)', fontWeight: 700, margin: 0 }}>
+                                      {student.name}
+                                    </h5>
+                                    <span style={{ fontSize: '0.68rem', opacity: 0.6 }}>CI: {student.identification}</span>
+                                  </div>
+                                  
+                                  {/* Checkbox de entrega de documentos */}
+                                  <label style={{ 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    gap: '0.3rem', 
+                                    fontSize: '0.7rem', 
+                                    fontWeight: 700, 
+                                    cursor: 'pointer', 
+                                    color: student.docs_submitted ? 'var(--status-approved)' : '#64748B',
+                                    background: student.docs_submitted ? 'rgba(16, 185, 129, 0.08)' : 'rgba(100, 116, 139, 0.08)',
+                                    padding: '0.2rem 0.5rem',
+                                    borderRadius: '6px'
+                                  }}>
+                                    <input 
+                                      type="checkbox" 
+                                      checked={student.docs_submitted} 
+                                      onChange={() => handleToggleDocs(student.id, student.docs_submitted)}
+                                      style={{ cursor: 'pointer', margin: 0 }}
+                                    />
+                                    {student.docs_submitted ? 'Docs Consignados' : 'Docs Pendientes'}
+                                  </label>
+                                </div>
+
+                                {/* Barra de horas */}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', fontWeight: 600, marginBottom: '0.1rem' }}>
+                                  <span>Progreso:</span>
+                                  <span style={{ color: 'var(--status-approved)' }}>
+                                    {student.approvedHours} / 120 hrs ({student.progressPercentage}%)
+                                  </span>
+                                </div>
+                                <div className="progress-bar-container" style={{ height: '6px', borderRadius: '3px' }}>
+                                  <div 
+                                    className="progress-bar-fill" 
+                                    style={{ 
+                                      width: `${student.progressPercentage}%`,
+                                      borderRadius: '3px',
+                                      background: student.approvedHours >= 120 ? 'linear-gradient(90deg, #10B981, #059669)' : 'linear-gradient(90deg, #3B82F6, #1D4ED8)'
+                                    }}
+                                  ></div>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Cuerpo del Panel */}
         <div className="no-print" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '2rem' }}>
           
@@ -484,19 +688,74 @@ export default function CoordinatorDashboard({ user, token }) {
                   </select>
                 </div>
 
-                {userFormData.role === 'student' && (
+                 {userFormData.role === 'student' && (
+                  <>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label" style={{ fontSize: '0.75rem' }}>Tutor Asignado</label>
+                      <select 
+                        value={userFormData.tutor_id}
+                        onChange={(e) => setUserFormData(prev => ({ ...prev, tutor_id: e.target.value }))}
+                        className="form-control"
+                        style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', cursor: 'pointer' }}
+                      >
+                        <option value="">No Asignado</option>
+                        {tutors.map(t => (
+                          <option key={t.id} value={t.id}>{t.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label" style={{ fontSize: '0.75rem' }}>Título del Proyecto</label>
+                      <input 
+                        type="text" 
+                        placeholder="Ej. Sistema de Control Comunitario"
+                        value={userFormData.project_title}
+                        onChange={(e) => setUserFormData(prev => ({ ...prev, project_title: e.target.value }))}
+                        className="form-control"
+                        style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
+                        required
+                      />
+                    </div>
+
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label" style={{ fontSize: '0.75rem' }}>Comunidad del Proyecto</label>
+                      <input 
+                        type="text" 
+                        placeholder="Ej. Sector Central Las Flores"
+                        value={userFormData.project_community}
+                        onChange={(e) => setUserFormData(prev => ({ ...prev, project_community: e.target.value }))}
+                        className="form-control"
+                        style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
+                        required
+                      />
+                    </div>
+
+                    <div className="form-group" style={{ marginBottom: 0, justifyContent: 'center', minHeight: '38px' }}>
+                      <label className="form-label" style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', height: '100%' }}>
+                        <input 
+                          type="checkbox" 
+                          checked={userFormData.docs_submitted}
+                          onChange={(e) => setUserFormData(prev => ({ ...prev, docs_submitted: e.target.checked }))}
+                          style={{ cursor: 'pointer', margin: 0 }}
+                        />
+                        Documentos Consignados
+                      </label>
+                    </div>
+                  </>
+                )}
+
+                {userFormData.role === 'tutor' && (
                   <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label" style={{ fontSize: '0.75rem' }}>Tutor Asignado</label>
+                    <label className="form-label" style={{ fontSize: '0.75rem' }}>Tipo de Tutor</label>
                     <select 
-                      value={userFormData.tutor_id}
-                      onChange={(e) => setUserFormData(prev => ({ ...prev, tutor_id: e.target.value }))}
+                      value={userFormData.tutor_type}
+                      onChange={(e) => setUserFormData(prev => ({ ...prev, tutor_type: e.target.value }))}
                       className="form-control"
                       style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', cursor: 'pointer' }}
                     >
-                      <option value="">No Asignado</option>
-                      {tutors.map(t => (
-                        <option key={t.id} value={t.id}>{t.name}</option>
-                      ))}
+                      <option value="académico">Académico</option>
+                      <option value="institucional">Institucional</option>
                     </select>
                   </div>
                 )}
@@ -524,7 +783,7 @@ export default function CoordinatorDashboard({ user, token }) {
                       style={{ padding: '0.45rem 0.8rem', fontSize: '0.85rem' }}
                       onClick={() => {
                         setEditingUser(null);
-                        setUserFormData({ name: '', identification: '', major: '', role: 'student', tutor_id: '' });
+                        setUserFormData({ name: '', identification: '', major: '', role: 'student', tutor_id: '', password: '', project_title: '', project_community: '', tutor_type: 'académico', docs_submitted: false });
                       }}
                     >
                       X
@@ -561,15 +820,29 @@ export default function CoordinatorDashboard({ user, token }) {
 
                     return (
                       <tr key={u.id} style={{ opacity: u.active ? 1 : 0.5 }}>
-                        <td style={{ fontWeight: 700, color: 'var(--unefa-navy)' }}>{u.name}</td>
-                        <td>{u.identification}</td>
-                        <td>{u.major}</td>
-                        <td>
+                        <td data-label="Nombre" style={{ fontWeight: 700, color: 'var(--unefa-navy)' }}>{u.name}</td>
+                        <td data-label="Cédula">{u.identification}</td>
+                        <td data-label="Carrera">{u.major}</td>
+                        <td data-label="Rol">
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem', fontWeight: 600 }}>
                             <i className={`fa-solid ${roleIcon}`}></i> {roleTag}
+                            {u.role === 'tutor' && (
+                              <span style={{
+                                marginLeft: '0.4rem',
+                                fontSize: '0.68rem',
+                                fontWeight: 'bold',
+                                color: u.tutor_type === 'académico' ? '#1D4ED8' : '#B45309',
+                                background: u.tutor_type === 'académico' ? '#EFF6FF' : '#FEF3C7',
+                                padding: '0.1rem 0.35rem',
+                                borderRadius: '5px',
+                                textTransform: 'capitalize'
+                              }}>
+                                {u.tutor_type || 'Académico'}
+                              </span>
+                            )}
                           </span>
                         </td>
-                        <td>
+                        <td data-label="Estado">
                           <span style={{ 
                             fontSize: '0.75rem', 
                             fontWeight: 'bold', 
@@ -581,7 +854,7 @@ export default function CoordinatorDashboard({ user, token }) {
                             {u.active ? 'Activo' : 'De Baja'}
                           </span>
                         </td>
-                        <td>
+                        <td data-label="Acciones">
                           <div style={{ display: 'flex', gap: '0.4rem' }}>
                             <button 
                               className="btn-secondary" 

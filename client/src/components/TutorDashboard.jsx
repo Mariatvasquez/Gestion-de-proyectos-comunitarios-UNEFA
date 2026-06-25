@@ -3,13 +3,21 @@ import React, { useState, useEffect } from 'react';
 const API_BASE = 'http://localhost:5000/api';
 
 export default function TutorDashboard({ user, token }) {
-  const [students, setStudents] = useState([]);
+  const [projects, setProjects] = useState([]);
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedActivity, setSelectedActivity] = useState(null);
   const [feedbackComment, setFeedbackComment] = useState('');
   const [actionSuccess, setActionSuccess] = useState('');
   const [actionError, setActionError] = useState('');
+  const [expandedProjects, setExpandedProjects] = useState({});
+
+  const toggleProject = (projectId) => {
+    setExpandedProjects(prev => ({
+      ...prev,
+      [projectId]: !prev[projectId]
+    }));
+  };
 
   // Cargar datos del tutor con JWT
   const loadData = async () => {
@@ -22,7 +30,7 @@ export default function TutorDashboard({ user, token }) {
       });
       const data = await res.json();
       
-      setStudents(data.students || []);
+      setProjects(data.projects || []);
       setActivities(data.activities || []);
       setLoading(false);
     } catch (err) {
@@ -102,56 +110,128 @@ export default function TutorDashboard({ user, token }) {
         </span>
         <h2 style={{ fontSize: '2rem', margin: '0.2rem 0 0.5rem 0' }}>{user.name}</h2>
         <p style={{ opacity: 0.8, fontSize: '0.9rem' }}>
-          <strong>Cédula:</strong> {user.identification} | <strong>Especialidad:</strong> {user.major} | <strong>Alumnos Asignados:</strong> {students.length}
+          <strong>Cédula:</strong> {user.identification} | <strong>Especialidad:</strong> {user.major} | <strong>Alumnos Asignados:</strong> {projects.reduce((acc, p) => acc + p.students.length, 0)}
         </p>
       </div>
 
       {/* Grid: Monitoreo Alumnos (Izquierda) e Inbox de Bitácoras (Derecha) */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1.9fr', gap: '2rem' }}>
         
-        {/* Monitoreo de Alumnos Asignados */}
+        {/* Monitoreo de Alumnos Asignados (Agrupados por Proyecto) */}
         <div className="glass-panel" style={{ padding: '1.8rem', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
           <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <i className="fa-solid fa-graduation-cap" style={{ color: 'var(--unefa-gold)' }}></i>
-            Alumnos Asignados
+            Proyectos Comunitarios
           </h3>
 
-          {students.length === 0 ? (
+          {projects.length === 0 ? (
             <p style={{ fontSize: '0.9rem', opacity: 0.7, textAlign: 'center', padding: '2rem' }}>No tienes estudiantes asignados en este período.</p>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {students.map(student => (
-                <div 
-                  key={student.id} 
-                  style={{
-                    background: 'white',
-                    border: '1px solid #E2E8F0',
-                    borderRadius: '10px',
-                    padding: '1rem',
-                    boxShadow: '0 2px 5px rgba(0,0,0,0.02)'
-                  }}
-                >
-                  <h4 style={{ fontSize: '0.95rem', color: 'var(--unefa-navy)', fontWeight: 700 }}>{student.name}</h4>
-                  <span style={{ fontSize: '0.75rem', opacity: 0.7, display: 'block', marginBottom: '0.5rem' }}>
-                    CI: {student.identification} | {student.major}
-                  </span>
-                  
-                  {/* Barra de progreso de este estudiante */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.3rem' }}>
-                    <span>Progreso:</span>
-                    <span style={{ color: 'var(--status-approved)' }}>{student.approved_hours} / 120 hrs ({student.progress_percentage}%)</span>
-                  </div>
-                  <div className="progress-bar-container" style={{ height: '8px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {projects.map(project => {
+                const pid = project.id || 0;
+                const isExpanded = !!expandedProjects[pid];
+                
+                return (
+                  <div 
+                    key={pid}
+                    style={{
+                      background: 'white',
+                      border: '1px solid #E2E8F0',
+                      borderRadius: '10px',
+                      overflow: 'hidden',
+                      boxShadow: '0 2px 5px rgba(0,0,0,0.01)'
+                    }}
+                  >
+                    {/* Botón / Header del Proyecto */}
                     <div 
-                      className="progress-bar-fill" 
-                      style={{ 
-                        width: `${student.progress_percentage}%`,
-                        background: student.approved_hours >= 120 ? 'linear-gradient(90deg, #10B981, #059669)' : 'linear-gradient(90deg, #3B82F6, #1D4ED8)'
+                      onClick={() => toggleProject(pid)}
+                      style={{
+                        background: 'rgba(12, 35, 64, 0.02)',
+                        padding: '0.8rem 1rem',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        cursor: 'pointer',
+                        borderBottom: isExpanded ? '1px solid #E2E8F0' : 'none'
                       }}
-                    ></div>
+                    >
+                      <div style={{ textAlign: 'left', flex: 1, paddingRight: '0.5rem' }}>
+                        <h4 style={{ fontSize: '0.88rem', color: 'var(--unefa-navy)', fontWeight: 700, margin: 0, lineHeight: 1.3 }}>
+                          {project.title}
+                        </h4>
+                        <span style={{ fontSize: '0.7rem', opacity: 0.7, display: 'block', marginTop: '0.1rem' }}>
+                          Comunidad: {project.community_name || 'N/A'}
+                        </span>
+                      </div>
+                      <i 
+                        className={`fa-solid ${isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'}`} 
+                        style={{ color: 'var(--unefa-gold)', fontSize: '0.8rem' }}
+                      ></i>
+                    </div>
+
+                    {/* Lista de Estudiantes al expandirse */}
+                    {isExpanded && (
+                      <div style={{ padding: '0.8rem', display: 'flex', flexDirection: 'column', gap: '0.8rem', background: '#FAFBFD' }}>
+                        {project.students.length === 0 ? (
+                          <p style={{ fontSize: '0.75rem', opacity: 0.6, padding: '0.5rem', textAlign: 'center' }}>No hay estudiantes asignados en este proyecto.</p>
+                        ) : (
+                          project.students.map(student => (
+                            <div 
+                              key={student.id}
+                              style={{ 
+                                background: 'white', 
+                                border: '1px solid #E2E8F0', 
+                                borderRadius: '8px', 
+                                padding: '0.7rem' 
+                              }}
+                            >
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.2rem' }}>
+                                <h5 style={{ fontSize: '0.85rem', color: 'var(--unefa-navy)', fontWeight: 700, margin: 0 }}>
+                                  {student.name}
+                                </h5>
+                                {student.docs_submitted && (
+                                  <span style={{ 
+                                    fontSize: '0.6rem', 
+                                    background: 'rgba(16, 185, 129, 0.1)', 
+                                    color: 'var(--status-approved)', 
+                                    padding: '0.1rem 0.4rem', 
+                                    borderRadius: '6px', 
+                                    fontWeight: 'bold' 
+                                  }}>
+                                    Docs OK
+                                  </span>
+                                )}
+                              </div>
+                              <span style={{ fontSize: '0.7rem', opacity: 0.6, display: 'block', marginBottom: '0.4rem' }}>
+                                CI: {student.identification}
+                              </span>
+
+                              {/* Barra de progreso */}
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', fontWeight: 600, marginBottom: '0.2rem' }}>
+                                <span>Horas Aprobadas:</span>
+                                <span style={{ color: 'var(--status-approved)' }}>
+                                  {student.approved_hours} / 120 hrs ({student.progress_percentage}%)
+                                </span>
+                              </div>
+                              <div className="progress-bar-container" style={{ height: '6px', borderRadius: '3px' }}>
+                                <div 
+                                  className="progress-bar-fill" 
+                                  style={{ 
+                                    width: `${student.progress_percentage}%`,
+                                    borderRadius: '3px',
+                                    background: student.approved_hours >= 120 ? 'linear-gradient(90deg, #10B981, #059669)' : 'linear-gradient(90deg, #3B82F6, #1D4ED8)'
+                                  }}
+                                ></div>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

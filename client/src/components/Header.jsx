@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 export default function Header({ user, onLogout }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+
   if (!user) return null;
 
   let roleLabel = 'Estudiante';
@@ -15,20 +17,7 @@ export default function Header({ user, onLogout }) {
   }
 
   return (
-    <header className="print-hidden" style={{
-      background: 'rgba(12, 35, 64, 0.96)',
-      backdropFilter: 'blur(10px)',
-      borderBottom: '3px solid var(--unefa-gold)',
-      color: 'white',
-      padding: '0.8rem 2rem',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      position: 'sticky',
-      top: 0,
-      zIndex: 1000,
-      boxShadow: '0 4px 20px rgba(0,0,0,0.15)'
-    }}>
+    <header className="app-header print-hidden">
       {/* Logotipo y Título */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
         <div style={{
@@ -66,8 +55,17 @@ export default function Header({ user, onLogout }) {
         </div>
       </div>
 
+      {/* Botón de Menú Hamburguesa en móvil */}
+      <button 
+        className="hamburger-btn" 
+        onClick={() => setMenuOpen(!menuOpen)}
+        aria-label="Menú de navegación"
+      >
+        <i className={`fa-solid ${menuOpen ? 'fa-xmark' : 'fa-bars'}`}></i>
+      </button>
+
       {/* Perfil e Interacciones */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+      <div className={`header-nav ${menuOpen ? 'nav-open' : ''}`}>
         {/* Info del Usuario */}
         <div style={{ textAlign: 'right' }}>
           <span style={{
@@ -98,7 +96,10 @@ export default function Header({ user, onLogout }) {
 
         {/* Botón Cerrar Sesión */}
         <button 
-          onClick={onLogout}
+          onClick={() => {
+            setMenuOpen(false);
+            onLogout();
+          }}
           className="btn-danger"
           style={{
             padding: '0.45rem 1rem',
