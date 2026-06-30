@@ -36,6 +36,7 @@ export default function CoordinatorDashboard({ user, token }) {
   // -- NUEVOS ESTADOS PARA EL ACTA EN PDF --
   const [mostrarModal, setMostrarModal] = useState(false);
   const [proyectoSeleccionado, setProyectoSeleccionado] = useState(null);
+  const [actaFormats, setActaFormats] = useState({});
   // ----------------------------------------
   
   const [selectedGanttProject, setSelectedGanttProject] = useState('fase_inicial');
@@ -373,11 +374,6 @@ export default function CoordinatorDashboard({ user, token }) {
             </p>
           </div>
 
-          <div style={{ display: 'flex', gap: '0.8rem' }}>
-            <button className="btn-primary" onClick={() => window.print()}>
-              <i className="fa-solid fa-print"></i> Imprimir Reporte (PDF)
-            </button>
-          </div>
         </div>
 
         {/* Menú de Navegación por Pestañas */}
@@ -588,6 +584,34 @@ export default function CoordinatorDashboard({ user, token }) {
                         {/* Lista de Estudiantes del Proyecto al expandir */}
                         {isExpanded && (
                           <div style={{ padding: '0.8rem', background: '#FAFBFD', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                            {/* Acciones Generales del Proyecto */}
+                            {project.students.length > 0 && (
+                              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '0.5rem', paddingBottom: '0.5rem', borderBottom: '1px solid #E2E8F0' }}>
+                                <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--unefa-navy)' }}>Formato del Acta:</label>
+                                <select 
+                                  value={actaFormats[pid] || 'horizontal'}
+                                  onChange={(e) => setActaFormats(prev => ({ ...prev, [pid]: e.target.value }))}
+                                  style={{ padding: '0.3rem 0.5rem', fontSize: '0.75rem', borderRadius: '5px', border: '1px solid #CBD5E1', outline: 'none' }}
+                                >
+                                  <option value="horizontal">Horizontal</option>
+                                  <option value="vertical_con_nombre">Vertical (Con nombre del proyecto)</option>
+                                  <option value="vertical_sin_nombre">Vertical (Sin nombre del proyecto)</option>
+                                </select>
+                                <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setProyectoSeleccionado(pid);
+                                    setMostrarModal(true);
+                                  }}
+                                  className="btn-primary" 
+                                  style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', borderRadius: '5px', marginLeft: '0.5rem' }}
+                                >
+                                  <i className="fa-solid fa-file-pdf" style={{ marginRight: '5px' }}></i>
+                                  Generar Acta General
+                                </button>
+                              </div>
+                            )}
+
                             {project.students.length === 0 ? (
                               <p style={{ fontSize: '0.75rem', opacity: 0.6, padding: '0.5rem', textAlign: 'center' }}>No hay estudiantes asignados.</p>
                             ) : (
@@ -641,18 +665,6 @@ export default function CoordinatorDashboard({ user, token }) {
                                     <span style={{ color: 'var(--status-approved)' }}>
                                       {student.approvedHours} / 120 hrs ({student.progressPercentage}%)
                                     </span>
-                                    <button 
-                                      onClick={(e) => {
-                                        e.stopPropagation(); // Evita que se cierre la tarjeta
-                                        setProyectoSeleccionado(pid); // Usa el pid correcto
-                                        setMostrarModal(true); // Abre el modal
-                                      }}
-                                      className="btn-primary" 
-                                      style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', borderRadius: '5px' }}
-                                    >
-                                      <i className="fa-solid fa-file-pdf" style={{ marginRight: '5px' }}></i>
-                                      Generar Acta
-                                    </button>
                                   </div>
                                   <div className="progress-bar-container" style={{ height: '6px', borderRadius: '3px' }}>
                                     <div 
@@ -1022,6 +1034,7 @@ export default function CoordinatorDashboard({ user, token }) {
       {mostrarModal && (
         <ActaModal 
           projectId={proyectoSeleccionado} 
+          formato={actaFormats[proyectoSeleccionado] || 'horizontal'}
           onClose={() => setMostrarModal(false)} 
         />
       )}

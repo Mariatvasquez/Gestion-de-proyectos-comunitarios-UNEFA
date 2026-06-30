@@ -136,7 +136,7 @@ router.put('/:id/comentario', verifyToken, checkRole(['tutor']), async (req, res
 
 // 5. Generar Acta de Evaluación Final en PDF con Formato Institucional Completo
 router.post('/generar-acta', async (req, res) => {
-  const { project_id, acta_type, semestre, seccion, fecha_inicio, fecha_culminacion, periodo, autoridades } = req.body;
+  const { project_id, formato, semestre, seccion, fecha_inicio, fecha_culminacion, periodo, autoridades } = req.body;
 
   try {
     // Consulta SQL: Busca a los estudiantes del proyecto, sus horas aprobadas y su tutor asignado
@@ -159,7 +159,7 @@ router.post('/generar-acta', async (req, res) => {
     }
 
     // Configuración del Documento (Vertical vs Horizontal)
-    const isHorizontal = acta_type === 3;
+    const isHorizontal = formato === 'horizontal';
     const doc = new PDFDocument({ 
       layout: isHorizontal ? 'landscape' : 'portrait', 
       margin: 50 
@@ -230,18 +230,18 @@ router.post('/generar-acta', async (req, res) => {
     // Dibujar Metadatos según el Formato Seleccionado (especificando coordenadas)
     doc.fontSize(10).font('Helvetica');
     
-    if (acta_type === 1 || acta_type === 2) {
+    if (formato === 'vertical_con_nombre' || formato === 'vertical_sin_nombre') {
       doc.font('Helvetica-Bold').text('ACTA DE EVALUACIÓN FINAL DEL SERVICIO COMUNITARIO', 50, doc.y, { width: titleWidth, align: 'center' });
       doc.moveDown();
       doc.font('Helvetica').text(`PROGRAMA: SERVICIO COMUNITARIO`, 50, doc.y);
       doc.text(`CARRERA: ${rows[0].major}    SEMESTRE: ${semestre}    SECCIÓN: ${seccion}`, 50, doc.y);
       doc.text(`FECHA DE INICIO: ${fecha_inicio}    FECHA DE CULMINACIÓN: ${fecha_culminacion}`, 50, doc.y);
       
-      if (acta_type === 1) {
+      if (formato === 'vertical_con_nombre') {
         doc.moveDown();
         doc.font('Helvetica-Bold').text(`TÍTULO: ${rows[0].titulo}`, 50, doc.y);
       }
-    } else if (acta_type === 3) {
+    } else if (formato === 'horizontal') {
       doc.font('Helvetica-Bold').text(`ACTA DE EVALUACIÓN FINAL SERVICIO COMUNITARIO PERIODO ${periodo}`, 50, doc.y, { width: titleWidth, align: 'center' });
     }
     
@@ -320,81 +320,96 @@ router.post('/generar-acta', async (req, res) => {
       currentY += 20;
     });
 
-    // Dibujar Firmas Autorizadas de las Tres Autoridades
-    doc.moveDown(5);
-    currentY = doc.y;
-    
-    // Evitar que las firmas queden solas si se desborda la página
-    const bottomLimit = isHorizontal ? 480 : 650;
-    if (currentY > bottomLimit) {
-      doc.addPage();
-      currentY = 100;
-    }
-    
-    if (!isHorizontal) {
-      // Líneas de firma (Vertical)
-      doc.lineWidth(1).strokeColor('#475569');
-      doc.moveTo(50, currentY).lineTo(190, currentY).stroke();
-      doc.moveTo(236, currentY).lineTo(376, currentY).stroke();
-      doc.moveTo(422, currentY).lineTo(562, currentY).stroke();
+    // Dibujar Firmas Autorizadas
+    const renderizarFirmas = (formatoDoc) => {
+      // Dejar padding superior generoso para las firmas a bolígrafo (aprox 60pt = ~2cm)
+      doc.moveDown(5);
+      let cy = doc.y;
       
-      // Nombres y Cargos
-      doc.fontSize(7).font('Helvetica-Bold').fillColor('#0F172A');
-      
-      // 1. Tutor Académico
-      const tutorName = rows[0].tutor_name || 'TUTOR ACADÉMICO';
-      const tutorCi = rows[0].tutor_identification ? `C.I. ${rows[0].tutor_identification}` : '';
-      doc.text(tutorName, 50, currentY + 5, { width: 140, align: 'center' });
-      doc.fontSize(6).font('Helvetica').fillColor('#64748B');
-      if (tutorCi) {
-        doc.text(tutorCi, 50, currentY + 15, { width: 140, align: 'center' });
-        doc.text('TUTOR ACADÉMICO', 50, currentY + 25, { width: 140, align: 'center' });
-      } else {
-        doc.text('TUTOR ACADÉMICO', 50, currentY + 15, { width: 140, align: 'center' });
+      // Evitar que las firmas queden solas si se desborda la página
+      const bottomLimit = isHorizontal ? 480 : 650;
+      if (cy > bottomLimit) {
+        doc.addPage();
+        doc.moveDown(4); // padding en la nueva página también
+        cy = doc.y;
       }
 
-      // 2. Jefe de Área Académica
-      doc.fontSize(7).font('Helvetica-Bold').fillColor('#0F172A');
-      doc.text(autoridades.jefe_area || 'JEFE DE ÁREA ACADÉMICA', 236, currentY + 5, { width: 140, align: 'center' });
-      doc.fontSize(6).font('Helvetica').fillColor('#64748B');
-      const jefeAreaCi = autoridades.jefe_area_ci ? `C.I. ${autoridades.jefe_area_ci}` : '';
-      if (jefeAreaCi) {
-        doc.text(jefeAreaCi, 236, currentY + 15, { width: 140, align: 'center' });
-        doc.text('JEFE DE ÁREA ACADÉMICA', 236, currentY + 25, { width: 140, align: 'center' });
-      } else {
-        doc.text('JEFE DE ÁREA ACADÉMICA', 236, currentY + 15, { width: 140, align: 'center' });
-      }
-
-      // 3. Responsable de Servicio Comunitario
-      doc.fontSize(7).font('Helvetica-Bold').fillColor('#0F172A');
-      doc.text(autoridades.responsable_servicio || 'RESPONSABLE SERVICIO COMUNITARIO', 422, currentY + 5, { width: 140, align: 'center' });
-      doc.fontSize(6).font('Helvetica').fillColor('#64748B');
-      const respCi = autoridades.responsable_servicio_ci ? `C.I. ${autoridades.responsable_servicio_ci}` : '';
-      if (respCi) {
-        doc.text(respCi, 422, currentY + 15, { width: 140, align: 'center' });
-        doc.text('RESPONSABLE SERVICIO COMUNITARIO', 422, currentY + 25, { width: 140, align: 'center' });
-      } else {
-        doc.text('RESPONSABLE SERVICIO COMUNITARIO', 422, currentY + 15, { width: 140, align: 'center' });
-      }
-    } else {
-      // Línea de firma única centrada (Horizontal)
-      const lineWidth = 220;
-      const lineX = (792 - lineWidth) / 2; // Centrado en página horizontal de 792 pt
-      doc.lineWidth(1).strokeColor('#475569');
-      doc.moveTo(lineX, currentY).lineTo(lineX + lineWidth, currentY).stroke();
+      const pageWidth = isHorizontal ? 792 : 612;
       
-      // Nombre y Cargo
-      doc.fontSize(7).font('Helvetica-Bold').fillColor('#0F172A');
-      doc.text(autoridades.responsable_servicio || 'RESPONSABLE DE PROYECTO COMUNITARIO', lineX, currentY + 5, { width: lineWidth, align: 'center' });
-      doc.fontSize(6).font('Helvetica').fillColor('#64748B');
-      const respCi = autoridades.responsable_servicio_ci ? `C.I. ${autoridades.responsable_servicio_ci}` : '';
-      if (respCi) {
-        doc.text(respCi, lineX, currentY + 15, { width: lineWidth, align: 'center' });
-        doc.text('RESPONSABLE DE PROYECTO COMUNITARIO', lineX, currentY + 25, { width: lineWidth, align: 'center' });
-      } else {
-        doc.text('RESPONSABLE DE PROYECTO COMUNITARIO', lineX, currentY + 15, { width: lineWidth, align: 'center' });
+      if (formatoDoc === 'horizontal' || formatoDoc === 'vertical_con_nombre') {
+        // 1 sola firma centrada
+        const lineWidth = 220;
+        const lineX = (pageWidth - lineWidth) / 2;
+        
+        doc.lineWidth(1).strokeColor('#475569');
+        doc.moveTo(lineX, cy).lineTo(lineX + lineWidth, cy).stroke();
+        
+        const nombre = autoridades.responsable_servicio || 'Prof. Rosa Camejo';
+        const ci = autoridades.responsable_servicio_ci ? `C.I. ${autoridades.responsable_servicio_ci}` : '';
+        
+        doc.fontSize(8).font('Helvetica-Bold').fillColor('#0F172A');
+        doc.text(nombre, lineX, cy + 5, { width: lineWidth, align: 'center' });
+        doc.fontSize(7).font('Helvetica').fillColor('#64748B');
+        if (ci) doc.text(ci, lineX, cy + 16, { width: lineWidth, align: 'center' });
+        doc.text('Responsable de Servicio Comunitario', lineX, cy + 27, { width: lineWidth, align: 'center' });
+
+      } else if (formatoDoc === 'vertical_sin_nombre') {
+        // 4 espacios de firma en cuadrícula 2x2
+        const leftX = 60;
+        const rightX = pageWidth / 2 + 30;
+        const lineWidth = 200;
+        
+        // Fila 1
+        doc.lineWidth(1).strokeColor('#475569');
+        doc.moveTo(leftX, cy).lineTo(leftX + lineWidth, cy).stroke();
+        doc.moveTo(rightX, cy).lineTo(rightX + lineWidth, cy).stroke();
+        
+        // Fila 1 - Tutor Académico
+        const tutorName = autoridades.tutor_academico || rows[0].tutor_name || 'Tutor Académico';
+        const tutorCi = autoridades.tutor_academico_ci ? `C.I. ${autoridades.tutor_academico_ci}` : (rows[0].tutor_identification ? `C.I. ${rows[0].tutor_identification}` : '');
+        doc.fontSize(8).font('Helvetica-Bold').fillColor('#0F172A');
+        doc.text(tutorName, leftX, cy + 5, { width: lineWidth, align: 'center' });
+        doc.fontSize(7).font('Helvetica').fillColor('#64748B');
+        if (tutorCi) doc.text(tutorCi, leftX, cy + 16, { width: lineWidth, align: 'center' });
+        doc.text('Tutor Académico', leftX, cy + 27, { width: lineWidth, align: 'center' });
+        
+        // Fila 1 - Responsable Servicio
+        const respName = autoridades.responsable_servicio || 'Prof. Rosa Camejo';
+        const respCi = autoridades.responsable_servicio_ci ? `C.I. ${autoridades.responsable_servicio_ci}` : '';
+        doc.fontSize(8).font('Helvetica-Bold').fillColor('#0F172A');
+        doc.text(respName, rightX, cy + 5, { width: lineWidth, align: 'center' });
+        doc.fontSize(7).font('Helvetica').fillColor('#64748B');
+        if (respCi) doc.text(respCi, rightX, cy + 16, { width: lineWidth, align: 'center' });
+        doc.text('Responsable Servicio Comunitario', rightX, cy + 27, { width: lineWidth, align: 'center' });
+        
+        // Espacio vertical para la siguiente fila (padding)
+        cy += 80;
+        
+        // Fila 2
+        doc.moveTo(leftX, cy).lineTo(leftX + lineWidth, cy).stroke();
+        doc.moveTo(rightX, cy).lineTo(rightX + lineWidth, cy).stroke();
+
+        // Fila 2 - Jefe Equipo de Extensión
+        const extName = autoridades.jefe_extension || 'Jefe de Equipo de Extensión';
+        const extCi = autoridades.jefe_extension_ci ? `C.I. ${autoridades.jefe_extension_ci}` : '';
+        doc.fontSize(8).font('Helvetica-Bold').fillColor('#0F172A');
+        doc.text(extName, leftX, cy + 5, { width: lineWidth, align: 'center' });
+        doc.fontSize(7).font('Helvetica').fillColor('#64748B');
+        if (extCi) doc.text(extCi, leftX, cy + 16, { width: lineWidth, align: 'center' });
+        doc.text('Jefe de Equipo de Extensión', leftX, cy + 27, { width: lineWidth, align: 'center' });
+
+        // Fila 2 - Jefe de Área Académica
+        const areaName = autoridades.jefe_area || 'Jefe de Área Académica';
+        const areaCi = autoridades.jefe_area_ci ? `C.I. ${autoridades.jefe_area_ci}` : '';
+        doc.fontSize(8).font('Helvetica-Bold').fillColor('#0F172A');
+        doc.text(areaName, rightX, cy + 5, { width: lineWidth, align: 'center' });
+        doc.fontSize(7).font('Helvetica').fillColor('#64748B');
+        if (areaCi) doc.text(areaCi, rightX, cy + 16, { width: lineWidth, align: 'center' });
+        doc.text('Jefe de Área Académica', rightX, cy + 27, { width: lineWidth, align: 'center' });
       }
-    }
+    };
+
+    renderizarFirmas(formato);
 
     doc.end();
 

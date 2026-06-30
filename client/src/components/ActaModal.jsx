@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 
-const ActaModal = ({ projectId, onClose }) => {
+const ActaModal = ({ projectId, formato, onClose }) => {
   const [formData, setFormData] = useState({
-    acta_type: 1, // 1: Con título, 2: Sin título, 3: Horizontal
     semestre: '',
     seccion: '',
     fecha_inicio: '',
@@ -12,7 +11,11 @@ const ActaModal = ({ projectId, onClose }) => {
       jefe_area: 'Prof. Carlos Mendoza',
       jefe_area_ci: 'V-8765432',
       responsable_servicio: 'Prof. Rosa Camejo',
-      responsable_servicio_ci: 'V-10203040'
+      responsable_servicio_ci: 'V-10203040',
+      jefe_extension: '',
+      jefe_extension_ci: '',
+      tutor_academico: '',
+      tutor_academico_ci: ''
     }
   });
 
@@ -40,7 +43,7 @@ const ActaModal = ({ projectId, onClose }) => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
-        body: JSON.stringify({ ...formData, project_id: projectId }),
+        body: JSON.stringify({ ...formData, project_id: projectId, formato: formato || 'horizontal' }),
       });
 
       if (!response.ok) throw new Error('Error al generar el documento');
@@ -105,28 +108,7 @@ const ActaModal = ({ projectId, onClose }) => {
         
         <form onSubmit={handleDownload} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-            <label style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--unefa-navy)' }}>Tipo de Acta</label>
-            <select 
-              name="acta_type" 
-              value={formData.acta_type} 
-              onChange={(e) => setFormData({...formData, acta_type: Number(e.target.value)})}
-              style={{
-                padding: '0.6rem',
-                borderRadius: '8px',
-                border: '1px solid #CBD5E1',
-                background: 'white',
-                fontFamily: 'var(--font-body)',
-                fontSize: '0.85rem',
-                outline: 'none',
-                cursor: 'pointer'
-              }}
-            >
-              <option value={1}>Vertical - Con Título</option>
-              <option value={2}>Vertical - Sin Título</option>
-              <option value={3}>Horizontal - Por Período</option>
-            </select>
-          </div>
+
 
           <div style={{ display: 'flex', gap: '0.8rem' }}>
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
@@ -170,7 +152,7 @@ const ActaModal = ({ projectId, onClose }) => {
           </div>
 
           {/* Renderizado condicional: Fechas vs Período */}
-          {formData.acta_type === 3 ? (
+          {formato === 'horizontal' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
               <label style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--unefa-navy)' }}>Período Académico</label>
               <input 
@@ -235,47 +217,93 @@ const ActaModal = ({ projectId, onClose }) => {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', borderTop: '1px solid #E2E8F0', paddingTop: '0.8rem', marginTop: '0.4rem' }}>
             <span style={{ fontSize: '0.75rem', fontWeight: '800', color: 'var(--unefa-gold)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Firmas Autorizadas</span>
             
-            {/* Jefe de Área */}
-            <div style={{ display: 'flex', gap: '0.8rem' }}>
-              <div style={{ flex: 1.6, display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-                <label style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--unefa-navy)' }}>Jefe de Área Académica</label>
-                <input 
-                  type="text" 
-                  name="jefe_area" 
-                  value={formData.autoridades.jefe_area} 
-                  onChange={handleAuthorityChange} 
-                  required 
-                  style={{
-                    padding: '0.55rem 0.7rem',
-                    borderRadius: '8px',
-                    border: '1px solid #CBD5E1',
-                    background: 'white',
-                    fontSize: '0.8rem',
-                    outline: 'none',
-                    width: '100%'
-                  }} 
-                />
-              </div>
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-                <label style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--unefa-navy)' }}>C.I. Jefe de Área</label>
-                <input 
-                  type="text" 
-                  name="jefe_area_ci" 
-                  value={formData.autoridades.jefe_area_ci} 
-                  onChange={handleAuthorityChange} 
-                  required 
-                  style={{
-                    padding: '0.55rem 0.7rem',
-                    borderRadius: '8px',
-                    border: '1px solid #CBD5E1',
-                    background: 'white',
-                    fontSize: '0.8rem',
-                    outline: 'none',
-                    width: '100%'
-                  }} 
-                />
-              </div>
-            </div>
+            {/* Campos condicionales (Tutor Académico, Jefe Extensión, Jefe Área) solo si es vertical_sin_nombre */}
+            {formato === 'vertical_sin_nombre' && (
+              <>
+                {/* Tutor Académico */}
+                <div style={{ display: 'flex', gap: '0.8rem', marginTop: '0.2rem' }}>
+                  <div style={{ flex: 1.6, display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                    <label style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--unefa-navy)' }}>Tutor Académico</label>
+                    <input 
+                      type="text" 
+                      name="tutor_academico" 
+                      value={formData.autoridades.tutor_academico} 
+                      onChange={handleAuthorityChange} 
+                      placeholder="Dejar vacío para usar base de datos"
+                      style={{
+                        padding: '0.55rem 0.7rem',
+                        borderRadius: '8px',
+                        border: '1px solid #CBD5E1',
+                        background: 'white',
+                        fontSize: '0.8rem',
+                        outline: 'none',
+                        width: '100%'
+                      }} 
+                    />
+                  </div>
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                    <label style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--unefa-navy)' }}>C.I. Tutor</label>
+                    <input 
+                      type="text" 
+                      name="tutor_academico_ci" 
+                      value={formData.autoridades.tutor_academico_ci} 
+                      onChange={handleAuthorityChange} 
+                      style={{
+                        padding: '0.55rem 0.7rem',
+                        borderRadius: '8px',
+                        border: '1px solid #CBD5E1',
+                        background: 'white',
+                        fontSize: '0.8rem',
+                        outline: 'none',
+                        width: '100%'
+                      }} 
+                    />
+                  </div>
+                </div>
+
+                {/* Jefe de Área Académica */}
+                <div style={{ display: 'flex', gap: '0.8rem', marginTop: '0.2rem' }}>
+                  <div style={{ flex: 1.6, display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                    <label style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--unefa-navy)' }}>Jefe de Área Académica</label>
+                    <input 
+                      type="text" 
+                      name="jefe_area" 
+                      value={formData.autoridades.jefe_area} 
+                      onChange={handleAuthorityChange} 
+                      required 
+                      style={{
+                        padding: '0.55rem 0.7rem',
+                        borderRadius: '8px',
+                        border: '1px solid #CBD5E1',
+                        background: 'white',
+                        fontSize: '0.8rem',
+                        outline: 'none',
+                        width: '100%'
+                      }} 
+                    />
+                  </div>
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                    <label style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--unefa-navy)' }}>C.I. Jefe de Área</label>
+                    <input 
+                      type="text" 
+                      name="jefe_area_ci" 
+                      value={formData.autoridades.jefe_area_ci} 
+                      onChange={handleAuthorityChange} 
+                      required 
+                      style={{
+                        padding: '0.55rem 0.7rem',
+                        borderRadius: '8px',
+                        border: '1px solid #CBD5E1',
+                        background: 'white',
+                        fontSize: '0.8rem',
+                        outline: 'none',
+                        width: '100%'
+                      }} 
+                    />
+                  </div>
+                </div>
+              </>
+            )}
 
             {/* Responsable de Servicio */}
             <div style={{ display: 'flex', gap: '0.8rem', marginTop: '0.2rem' }}>
@@ -318,6 +346,50 @@ const ActaModal = ({ projectId, onClose }) => {
                 />
               </div>
             </div>
+
+            {/* Jefe Equipo de Extensión (solo si es vertical_sin_nombre) */}
+            {formato === 'vertical_sin_nombre' && (
+              <div style={{ display: 'flex', gap: '0.8rem', marginTop: '0.2rem' }}>
+                <div style={{ flex: 1.6, display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--unefa-navy)' }}>Jefe Equipo Extensión</label>
+                  <input 
+                    type="text" 
+                    name="jefe_extension" 
+                    value={formData.autoridades.jefe_extension} 
+                    onChange={handleAuthorityChange} 
+                    required 
+                    style={{
+                      padding: '0.55rem 0.7rem',
+                      borderRadius: '8px',
+                      border: '1px solid #CBD5E1',
+                      background: 'white',
+                      fontSize: '0.8rem',
+                      outline: 'none',
+                      width: '100%'
+                    }} 
+                  />
+                </div>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--unefa-navy)' }}>C.I. Jefe Extensión</label>
+                  <input 
+                    type="text" 
+                    name="jefe_extension_ci" 
+                    value={formData.autoridades.jefe_extension_ci} 
+                    onChange={handleAuthorityChange} 
+                    required 
+                    style={{
+                      padding: '0.55rem 0.7rem',
+                      borderRadius: '8px',
+                      border: '1px solid #CBD5E1',
+                      background: 'white',
+                      fontSize: '0.8rem',
+                      outline: 'none',
+                      width: '100%'
+                    }} 
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.6rem', marginTop: '0.8rem' }}>
