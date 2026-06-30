@@ -40,10 +40,17 @@ router.get('/:project_id/cronograma', verifyToken, async (req, res) => {
   const { project_id } = req.params;
   
   try {
-    const result = await db.query(
-      'SELECT * FROM project_schedules WHERE project_id = $1 ORDER BY start_week ASC, id ASC',
-      [project_id]
-    );
+    let result;
+    if (project_id === 'fase_inicial') {
+      result = await db.query(
+        'SELECT * FROM project_schedules WHERE project_id IS NULL ORDER BY start_week ASC, id ASC'
+      );
+    } else {
+      result = await db.query(
+        'SELECT * FROM project_schedules WHERE project_id = $1 ORDER BY start_week ASC, id ASC',
+        [project_id]
+      );
+    }
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -63,17 +70,23 @@ router.post('/:project_id/cronograma', verifyToken, async (req, res) => {
   const { objective, activity, task, start_week, end_week } = req.body;
   
   try {
-    // Verificar si el proyecto existe
-    const projCheck = await db.query('SELECT id FROM current_projects WHERE id = $1', [project_id]);
-    if (projCheck.rowCount === 0) {
-      return res.status(404).json({ error: 'Proyecto no encontrado.' });
+    let dbProjectId = project_id;
+    
+    if (project_id === 'fase_inicial') {
+      dbProjectId = null;
+    } else {
+      // Verificar si el proyecto existe
+      const projCheck = await db.query('SELECT id FROM current_projects WHERE id = $1', [project_id]);
+      if (projCheck.rowCount === 0) {
+        return res.status(404).json({ error: 'Proyecto no encontrado.' });
+      }
     }
     
     const result = await db.query(
       `INSERT INTO project_schedules (project_id, objective, activity, task, start_week, end_week)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [project_id, objective.trim(), activity.trim(), task.trim(), parseInt(start_week, 10), parseInt(end_week, 10)]
+      [dbProjectId, objective.trim(), activity.trim(), task.trim(), parseInt(start_week, 10), parseInt(end_week, 10)]
     );
     
     res.status(201).json(result.rows[0]);
@@ -95,13 +108,24 @@ router.put('/:project_id/cronograma/:id', verifyToken, async (req, res) => {
   const { objective, activity, task, start_week, end_week } = req.body;
   
   try {
-    const result = await db.query(
-      `UPDATE project_schedules 
-       SET objective = $1, activity = $2, task = $3, start_week = $4, end_week = $5
-       WHERE id = $6 AND project_id = $7
-       RETURNING *`,
-      [objective.trim(), activity.trim(), task.trim(), parseInt(start_week, 10), parseInt(end_week, 10), id, project_id]
-    );
+    let result;
+    if (project_id === 'fase_inicial') {
+      result = await db.query(
+        `UPDATE project_schedules 
+         SET objective = $1, activity = $2, task = $3, start_week = $4, end_week = $5
+         WHERE id = $6 AND project_id IS NULL
+         RETURNING *`,
+        [objective.trim(), activity.trim(), task.trim(), parseInt(start_week, 10), parseInt(end_week, 10), id]
+      );
+    } else {
+      result = await db.query(
+        `UPDATE project_schedules 
+         SET objective = $1, activity = $2, task = $3, start_week = $4, end_week = $5
+         WHERE id = $6 AND project_id = $7
+         RETURNING *`,
+        [objective.trim(), activity.trim(), task.trim(), parseInt(start_week, 10), parseInt(end_week, 10), id, project_id]
+      );
+    }
     
     if (result.rowCount === 0) {
       return res.status(404).json({ error: 'Registro de cronograma no encontrado o no pertenece a este proyecto.' });
@@ -119,10 +143,18 @@ router.delete('/:project_id/cronograma/:id', verifyToken, async (req, res) => {
   const { project_id, id } = req.params;
   
   try {
-    const result = await db.query(
-      'DELETE FROM project_schedules WHERE id = $1 AND project_id = $2 RETURNING *',
-      [id, project_id]
-    );
+    let result;
+    if (project_id === 'fase_inicial') {
+      result = await db.query(
+        'DELETE FROM project_schedules WHERE id = $1 AND project_id IS NULL RETURNING *',
+        [id]
+      );
+    } else {
+      result = await db.query(
+        'DELETE FROM project_schedules WHERE id = $1 AND project_id = $2 RETURNING *',
+        [id, project_id]
+      );
+    }
     
     if (result.rowCount === 0) {
       return res.status(404).json({ error: 'Registro de cronograma no encontrado o no pertenece a este proyecto.' });

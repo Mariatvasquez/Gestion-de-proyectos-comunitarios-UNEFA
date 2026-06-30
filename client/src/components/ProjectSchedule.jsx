@@ -190,6 +190,25 @@ export default function ProjectSchedule({ projectId, token }) {
   // Generar array de semanas (1 a 12)
   const weeks = Array.from({ length: 12 }, (_, i) => i + 1);
 
+  // Función para agrupar las tareas
+  const agruparCronograma = (items) => {
+    return items.reduce((acc, item) => {
+      const objKey = item.objective || 'Sin Objetivo';
+      const actKey = item.activity || 'Sin Actividad';
+
+      if (!acc[objKey]) {
+        acc[objKey] = {};
+      }
+      if (!acc[objKey][actKey]) {
+        acc[objKey][actKey] = [];
+      }
+      acc[objKey][actKey].push(item);
+      return acc;
+    }, {});
+  };
+
+  const scheduleAgrupado = agruparCronograma(scheduleItems);
+
   return (
     <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
       
@@ -328,164 +347,191 @@ export default function ProjectSchedule({ projectId, token }) {
               </tr>
             </thead>
             <tbody>
-              {scheduleItems.map((item) => {
-                const isEditing = editingId === item.id;
-                
-                return (
-                  <tr key={item.id} style={{ borderBottom: '1px solid #E2E8F0', verticalAlign: 'middle', background: isEditing ? '#F1F5F9' : 'transparent' }}>
+              {Object.entries(scheduleAgrupado).map(([objective, activities], objIndex) => {
+                const allTasksInObj = Object.values(activities).flat();
+                const isEditingObjGroup = allTasksInObj.some(t => t.id === editingId);
+                const totalTasksObj = allTasksInObj.length;
+
+                return Object.entries(activities).map(([activity, tasks], actIndex) => {
+                  const totalTasksAct = tasks.length;
+
+                  return tasks.map((item, taskIndex) => {
+                    const isEditing = editingId === item.id;
                     
-                    {/* Celda: Objetivo */}
-                    <td style={{ padding: '0.75rem', verticalAlign: 'top', color: '#1E293B' }}>
-                      {isEditing ? (
-                        <textarea 
-                          name="objective" 
-                          value={editFormData.objective} 
-                          onChange={handleEditInputChange}
-                          style={{ width: '100%', padding: '0.4rem', fontSize: '0.75rem', border: '1px solid #CBD5E1', borderRadius: '4px', resize: 'vertical' }}
-                        />
-                      ) : (
-                        <strong>{item.objective}</strong>
-                      )}
-                    </td>
+                    const showObjectiveCell = isEditingObjGroup || (actIndex === 0 && taskIndex === 0);
+                    const objRowSpan = isEditingObjGroup ? 1 : totalTasksObj;
 
-                    {/* Celda: Actividad */}
-                    <td style={{ padding: '0.75rem', verticalAlign: 'top', color: '#475569' }}>
-                      {isEditing ? (
-                        <textarea 
-                          name="activity" 
-                          value={editFormData.activity} 
-                          onChange={handleEditInputChange}
-                          style={{ width: '100%', padding: '0.4rem', fontSize: '0.75rem', border: '1px solid #CBD5E1', borderRadius: '4px', resize: 'vertical' }}
-                        />
-                      ) : (
-                        item.activity
-                      )}
-                    </td>
+                    const showActivityCell = isEditingObjGroup || taskIndex === 0;
+                    const actRowSpan = isEditingObjGroup ? 1 : totalTasksAct;
+                    
+                    return (
+                      <tr key={item.id} style={{ borderBottom: '1px solid #E2E8F0', verticalAlign: 'middle', background: isEditing ? '#F8FAFC' : 'transparent' }}>
+                        
+                        {/* Celda: Objetivo (con rowSpan) */}
+                        {showObjectiveCell && (
+                          <td rowSpan={objRowSpan} style={{ padding: '0.75rem', verticalAlign: isEditingObjGroup ? 'top' : 'middle', borderRight: '2px solid #E2E8F0', background: isEditingObjGroup ? 'transparent' : '#FAFAFA' }}>
+                            {isEditing ? (
+                              <textarea 
+                                name="objective" 
+                                value={editFormData.objective} 
+                                onChange={handleEditInputChange}
+                                style={{ width: '100%', padding: '0.4rem', fontSize: '0.75rem', border: '1px solid #CBD5E1', borderRadius: '4px', resize: 'vertical' }}
+                              />
+                            ) : (
+                              <span style={{ fontWeight: 700, color: '#1E293B', display: 'block' }}>
+                                {isEditingObjGroup ? item.objective : objective}
+                              </span>
+                            )}
+                          </td>
+                        )}
 
-                    {/* Celda: Tarea */}
-                    <td style={{ padding: '0.75rem', verticalAlign: 'top', color: '#475569' }}>
-                      {isEditing ? (
-                        <textarea 
-                          name="task" 
-                          value={editFormData.task} 
-                          onChange={handleEditInputChange}
-                          style={{ width: '100%', padding: '0.4rem', fontSize: '0.75rem', border: '1px solid #CBD5E1', borderRadius: '4px', resize: 'vertical' }}
-                        />
-                      ) : (
-                        item.task
-                      )}
-                    </td>
+                        {/* Celda: Actividad (con rowSpan) */}
+                        {showActivityCell && (
+                          <td rowSpan={actRowSpan} style={{ padding: '0.75rem', verticalAlign: isEditingObjGroup ? 'top' : 'middle', borderRight: '2px solid #E2E8F0', background: isEditingObjGroup ? 'transparent' : '#FAFAFA' }}>
+                            {isEditing ? (
+                              <textarea 
+                                name="activity" 
+                                value={editFormData.activity} 
+                                onChange={handleEditInputChange}
+                                style={{ width: '100%', padding: '0.4rem', fontSize: '0.75rem', border: '1px solid #CBD5E1', borderRadius: '4px', resize: 'vertical' }}
+                              />
+                            ) : (
+                              <span style={{ fontWeight: 500, color: '#475569', display: 'block' }}>
+                                {isEditingObjGroup ? item.activity : activity}
+                              </span>
+                            )}
+                          </td>
+                        )}
 
-                    {/* Celdas de las Semanas (Matriz Gantt) */}
-                    {weeks.map((w) => {
-                      const start = isEditing ? editFormData.start_week : item.start_week;
-                      const end = isEditing ? editFormData.end_week : item.end_week;
-                      
-                      const isSelected = w >= start && w <= end;
-                      const isStart = w === start;
-                      const isEnd = w === end;
+                        {/* Celda: Tarea */}
+                        <td style={{ padding: '0.75rem', verticalAlign: 'top', color: '#1E293B', fontWeight: isEditing ? 'normal' : '500', borderRight: '1px solid #E2E8F0' }}>
+                          {isEditing ? (
+                            <textarea 
+                              name="task" 
+                              value={editFormData.task} 
+                              onChange={handleEditInputChange}
+                              style={{ width: '100%', padding: '0.4rem', fontSize: '0.75rem', border: '1px solid #CBD5E1', borderRadius: '4px', resize: 'vertical' }}
+                            />
+                          ) : (
+                            <span>
+                              <i className="fa-solid fa-list-check" style={{ marginRight: '6px', color: '#94A3B8' }}></i>
+                              {item.task}
+                            </span>
+                          )}
+                        </td>
 
-                      return (
-                        <td 
-                          key={w} 
-                          style={{ 
-                            padding: '0', 
-                            position: 'relative', 
-                            height: '45px', 
-                            borderLeft: '1px solid #E2E8F0',
-                            backgroundColor: isEditing ? '#F8FAFC' : '#fff'
-                          }}
-                        >
-                          {isSelected && (
-                            <div 
-                              style={{
-                                position: 'absolute',
-                                top: '22%',
-                                bottom: '22%',
-                                left: isStart ? '8px' : '0',
-                                right: isEnd ? '8px' : '0',
-                                backgroundColor: 'var(--unefa-navy)',
-                                borderRadius: `${isStart ? '6px' : '0'} ${isEnd ? '6px' : '0'} ${isEnd ? '6px' : '0'} ${isStart ? '6px' : '0'}`,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                color: '#fff',
-                                boxShadow: '0 2px 4px rgba(12, 35, 64, 0.15)',
-                                zIndex: 1
+                        {/* Celdas de las Semanas (Matriz Gantt) */}
+                        {weeks.map((w) => {
+                          const start = isEditing ? editFormData.start_week : item.start_week;
+                          const end = isEditing ? editFormData.end_week : item.end_week;
+                          
+                          const isSelected = w >= start && w <= end;
+                          const isStart = w === start;
+                          const isEnd = w === end;
+
+                          return (
+                            <td 
+                              key={w} 
+                              style={{ 
+                                padding: '0', 
+                                position: 'relative', 
+                                height: '45px', 
+                                borderLeft: '1px solid #E2E8F0',
+                                backgroundColor: isEditing ? '#F1F5F9' : '#fff'
                               }}
-                              title={`Semana ${w}`}
                             >
-                              {isStart && (
-                                <i className="fa-solid fa-check" style={{ fontSize: '0.65rem', color: 'var(--unefa-gold)' }}></i>
+                              {isSelected && (
+                                <div 
+                                  style={{
+                                    position: 'absolute',
+                                    top: '22%',
+                                    bottom: '22%',
+                                    left: isStart ? '8px' : '0',
+                                    right: isEnd ? '8px' : '0',
+                                    backgroundColor: 'var(--unefa-navy)',
+                                    borderRadius: `${isStart ? '6px' : '0'} ${isEnd ? '6px' : '0'} ${isEnd ? '6px' : '0'} ${isStart ? '6px' : '0'}`,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: '#fff',
+                                    boxShadow: '0 2px 4px rgba(12, 35, 64, 0.15)',
+                                    zIndex: 1
+                                  }}
+                                  title={`Semana ${w}`}
+                                >
+                                  {isStart && (
+                                    <i className="fa-solid fa-check" style={{ fontSize: '0.65rem', color: 'var(--unefa-gold)' }}></i>
+                                  )}
+                                </div>
                               )}
+                            </td>
+                          );
+                        })}
+
+                        {/* Acciones (Editar/Eliminar/Guardar) */}
+                        <td style={{ padding: '0.5rem', textAlign: 'center', borderLeft: '1px solid #E2E8F0' }}>
+                          {isEditing ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', alignItems: 'center' }}>
+                              <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.2rem' }}>
+                                <select 
+                                  name="start_week" 
+                                  value={editFormData.start_week} 
+                                  onChange={handleEditInputChange}
+                                  style={{ padding: '0.2rem', fontSize: '0.7rem', border: '1px solid #CBD5E1', borderRadius: '3px' }}
+                                >
+                                  {weeks.map(w => <option key={w} value={w}>S{w}</option>)}
+                                </select>
+                                <span style={{ fontSize: '0.7rem', alignSelf: 'center' }}>al</span>
+                                <select 
+                                  name="end_week" 
+                                  value={editFormData.end_week} 
+                                  onChange={handleEditInputChange}
+                                  style={{ padding: '0.2rem', fontSize: '0.7rem', border: '1px solid #CBD5E1', borderRadius: '3px' }}
+                                >
+                                  {weeks.map(w => <option key={w} value={w}>S{w}</option>)}
+                                </select>
+                              </div>
+                              <div style={{ display: 'flex', gap: '0.3rem' }}>
+                                <button 
+                                  onClick={() => saveEdit(item.id)}
+                                  style={{ padding: '0.25rem 0.5rem', background: 'var(--status-approved)', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.7rem', fontWeight: 'bold' }}
+                                  title="Guardar Cambios"
+                                >
+                                  <i className="fa-solid fa-save"></i>
+                                </button>
+                                <button 
+                                  onClick={() => setEditingId(null)}
+                                  style={{ padding: '0.25rem 0.5rem', background: '#64748B', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.7rem', fontWeight: 'bold' }}
+                                  title="Cancelar"
+                                >
+                                  <i className="fa-solid fa-times"></i>
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', justifyContent: 'center', gap: '0.4rem' }}>
+                              <button 
+                                onClick={() => startEdit(item)}
+                                style={{ padding: '0.3rem 0.5rem', background: '#E2E8F0', color: 'var(--unefa-navy)', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.72rem' }}
+                                title="Editar Tarea"
+                              >
+                                <i className="fa-solid fa-pen"></i>
+                              </button>
+                              <button 
+                                onClick={() => handleDelete(item.id)}
+                                style={{ padding: '0.3rem 0.5rem', background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.72rem' }}
+                                title="Eliminar Tarea"
+                              >
+                                <i className="fa-solid fa-trash"></i>
+                              </button>
                             </div>
                           )}
                         </td>
-                      );
-                    })}
 
-                    {/* Acciones (Editar/Eliminar/Guardar) */}
-                    <td style={{ padding: '0.5rem', textAlign: 'center', borderLeft: '1px solid #E2E8F0' }}>
-                      {isEditing ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', alignItems: 'center' }}>
-                          <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.2rem' }}>
-                            <select 
-                              name="start_week" 
-                              value={editFormData.start_week} 
-                              onChange={handleEditInputChange}
-                              style={{ padding: '0.2rem', fontSize: '0.7rem', border: '1px solid #CBD5E1', borderRadius: '3px' }}
-                            >
-                              {weeks.map(w => <option key={w} value={w}>S{w}</option>)}
-                            </select>
-                            <span style={{ fontSize: '0.7rem', alignSelf: 'center' }}>al</span>
-                            <select 
-                              name="end_week" 
-                              value={editFormData.end_week} 
-                              onChange={handleEditInputChange}
-                              style={{ padding: '0.2rem', fontSize: '0.7rem', border: '1px solid #CBD5E1', borderRadius: '3px' }}
-                            >
-                              {weeks.map(w => <option key={w} value={w}>S{w}</option>)}
-                            </select>
-                          </div>
-                          <div style={{ display: 'flex', gap: '0.3rem' }}>
-                            <button 
-                              onClick={() => saveEdit(item.id)}
-                              style={{ padding: '0.25rem 0.5rem', background: 'var(--status-approved)', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.7rem', fontWeight: 'bold' }}
-                              title="Guardar Cambios"
-                            >
-                              <i className="fa-solid fa-save"></i>
-                            </button>
-                            <button 
-                              onClick={() => setEditingId(null)}
-                              style={{ padding: '0.25rem 0.5rem', background: '#64748B', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.7rem', fontWeight: 'bold' }}
-                              title="Cancelar"
-                            >
-                              <i className="fa-solid fa-times"></i>
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div style={{ display: 'flex', justifyContent: 'center', gap: '0.4rem' }}>
-                          <button 
-                            onClick={() => startEdit(item)}
-                            style={{ padding: '0.3rem 0.5rem', background: '#E2E8F0', color: 'var(--unefa-navy)', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.72rem' }}
-                            title="Editar Tarea"
-                          >
-                            <i className="fa-solid fa-pen"></i>
-                          </button>
-                          <button 
-                            onClick={() => handleDelete(item.id)}
-                            style={{ padding: '0.3rem 0.5rem', background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.72rem' }}
-                            title="Eliminar Tarea"
-                          >
-                            <i className="fa-solid fa-trash"></i>
-                          </button>
-                        </div>
-                      )}
-                    </td>
-
-                  </tr>
-                );
+                      </tr>
+                    );
+                  });
+                });
               })}
             </tbody>
           </table>

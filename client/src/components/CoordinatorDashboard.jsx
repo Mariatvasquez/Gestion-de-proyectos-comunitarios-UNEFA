@@ -38,7 +38,7 @@ export default function CoordinatorDashboard({ user, token }) {
   const [proyectoSeleccionado, setProyectoSeleccionado] = useState(null);
   // ----------------------------------------
   
-  const [selectedGanttProject, setSelectedGanttProject] = useState('');
+  const [selectedGanttProject, setSelectedGanttProject] = useState('fase_inicial');
 
 
   const toggleCoordProject = (pid) => {
@@ -999,7 +999,8 @@ export default function CoordinatorDashboard({ user, token }) {
                   onChange={(e) => setSelectedGanttProject(e.target.value)}
                   style={{ padding: '0.6rem 0.8rem', fontSize: '0.9rem', cursor: 'pointer', marginTop: '0.5rem' }}
                 >
-                  <option value="">-- Elija un proyecto disponible --</option>
+                  <option value="fase_inicial">Fase Inicial (Actividades Generales / Sin Proyecto)</option>
+                  <option value="" disabled>-- Elija un proyecto disponible --</option>
                   {projectsList.map(p => (
                     <option key={p.id || 0} value={p.id}>{p.title} ({p.community_name})</option>
                   ))}
