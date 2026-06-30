@@ -37,6 +37,9 @@ export default function CoordinatorDashboard({ user, token }) {
   const [mostrarModal, setMostrarModal] = useState(false);
   const [proyectoSeleccionado, setProyectoSeleccionado] = useState(null);
   // ----------------------------------------
+  
+  const [selectedGanttProject, setSelectedGanttProject] = useState('');
+
 
   const toggleCoordProject = (pid) => {
     setExpandedCoordProjects(prev => ({
@@ -240,44 +243,6 @@ export default function CoordinatorDashboard({ user, token }) {
     }
   };
 
-  // Exportar a CSV (Excel)
-  const handleExportCSV = () => {
-    if (activities.length === 0) {
-      alert('No hay datos disponibles para exportar.');
-      return;
-    }
-
-    // Cabeceras CSV
-    const headers = ['ID Bitacora', 'Estudiante', 'Carrera', 'Cédula', 'Fecha Actividad', 'Horas', 'Modalidad', 'Vocero Comunal', 'Telefono Vocero', 'Estado'];
-    
-    const rows = activities.map(act => [
-      act.id,
-      act.student_name,
-      act.major || 'Ingeniería de Sistemas',
-      act.student_identification,
-      new Date(act.activity_date).toLocaleDateString('es-ES', { timeZone: 'UTC' }),
-      act.hours_spent,
-      act.physical_attendance ? 'Presencial' : 'Remoto',
-      act.spokesperson_name,
-      act.spokesperson_phone,
-      act.status === 'approved' ? 'Aprobada' : act.status === 'pending' ? 'Pendiente' : 'Por Corregir'
-    ]);
-
-    // Unir contenidos en CSV UTF-8
-    const csvContent = [headers, ...rows]
-      .map(row => row.map(value => `"${value.toString().replace(/"/g, '""')}"`).join(','))
-      .join('\n');
-
-    // Crear y descargar archivo
-    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `Bitacoras_Servicio_Comunitario_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
 
   // Filtrar lista de usuarios
   const filteredUsers = users.filter(u => {
@@ -409,9 +374,6 @@ export default function CoordinatorDashboard({ user, token }) {
           </div>
 
           <div style={{ display: 'flex', gap: '0.8rem' }}>
-            <button className="btn-accent" onClick={handleExportCSV}>
-              <i className="fa-solid fa-file-excel"></i> Exportar Excel (CSV)
-            </button>
             <button className="btn-primary" onClick={() => window.print()}>
               <i className="fa-solid fa-print"></i> Imprimir Reporte (PDF)
             </button>
@@ -705,7 +667,6 @@ export default function CoordinatorDashboard({ user, token }) {
                                 </div>
                               ))
                             )}
-                            <ProjectSchedule projectId={pid} token={token} />
                           </div>
                         )}
                       </div>
@@ -1027,103 +988,30 @@ export default function CoordinatorDashboard({ user, token }) {
               Gestor del Cronograma
             </h3>
 
-            {milestoneSuccess && (
-              <div style={{ color: 'var(--status-approved)', background: 'rgba(16, 185, 129, 0.08)', padding: '0.6rem 1rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 600 }}>
-                {milestoneSuccess}
-              </div>
-            )}
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem' }}>
-              {/* Formulario rápido */}
-              <form onSubmit={handleMilestoneSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label" style={{ fontSize: '0.8rem' }}>Título del Hito Académico</label>
-                  <input 
-                    type="text" 
-                    placeholder="Ej. Taller de Inducción"
-                    value={milestoneFormData.title}
-                    onChange={(e) => setMilestoneFormData(prev => ({ ...prev, title: e.target.value }))}
-                    className="form-control"
-                    style={{ padding: '0.45rem 0.8rem', fontSize: '0.85rem' }}
-                    required
-                  />
-                </div>
-
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label" style={{ fontSize: '0.8rem' }}>Fecha de Ejecución</label>
-                  <input 
-                    type="date" 
-                    value={milestoneFormData.event_date}
-                    onChange={(e) => setMilestoneFormData(prev => ({ ...prev, event_date: e.target.value }))}
-                    className="form-control"
-                    style={{ padding: '0.45rem 0.8rem', fontSize: '0.85rem' }}
-                    required
-                  />
-                </div>
-
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label" style={{ fontSize: '0.8rem' }}>Proyecto Vinculado</label>
-                  <select
-                    value={milestoneFormData.project_id}
-                    onChange={(e) => setMilestoneFormData(prev => ({ ...prev, project_id: e.target.value }))}
-                    className="form-control"
-                    style={{ padding: '0.45rem 0.8rem', fontSize: '0.85rem', cursor: 'pointer' }}
-                    required
-                  >
-                    <option value="">Seleccione un Proyecto</option>
-                    {projectsList.map(p => (
-                      <option key={p.id || 0} value={p.id}>{p.title}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <button type="submit" className="btn-primary" style={{ justifyContent: 'center', padding: '0.5rem' }}>
-                  <i className="fa-solid fa-plus"></i> Agregar Hito
-                </button>
-              </form>
-
-              {/* Lista lateral de hitos */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', padding: '1.2rem', background: 'rgba(12, 35, 64, 0.02)', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
-                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--unefa-navy)', display: 'block', marginBottom: '0.2rem' }}>
-                  Hitos Programados:
-                </span>
-
-                {milestones.length === 0 ? (
-                  <p style={{ fontSize: '0.8rem', opacity: 0.7 }}>No hay hitos programados.</p>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', maxHeight: '400px', overflowY: 'auto', paddingRight: '0.3rem' }}>
-                    {milestones.map(ms => (
-                      <div 
-                        key={ms.id} 
-                        style={{ 
-                          background: 'white', 
-                          border: '1px solid #E2E8F0', 
-                          borderRadius: '8px', 
-                          padding: '0.6rem 0.8rem',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center'
-                        }}
-                      >
-                        <div>
-                          <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--unefa-gold)' }}>
-                            {new Date(ms.event_date).toLocaleDateString('es-ES', { timeZone: 'UTC' })}
-                          </span>
-                          <h4 style={{ fontSize: '0.85rem', margin: 0, color: 'var(--unefa-navy)' }}>{ms.title}</h4>
-                        </div>
-                        <button 
-                          className="btn-secondary" 
-                          style={{ padding: '0.2rem 0.4rem', border: 'none', background: 'transparent', color: 'var(--status-correct)', cursor: 'pointer' }}
-                          onClick={() => handleDeleteMilestone(ms.id)}
-                        >
-                          <i className="fa-solid fa-trash-can"></i>
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
+            <div style={{ maxWidth: '500px', background: 'rgba(12, 35, 64, 0.02)', padding: '1.5rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label" style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--unefa-navy)' }}>
+                  Seleccione el Proyecto Comunitario
+                </label>
+                <select 
+                  className="form-control"
+                  value={selectedGanttProject}
+                  onChange={(e) => setSelectedGanttProject(e.target.value)}
+                  style={{ padding: '0.6rem 0.8rem', fontSize: '0.9rem', cursor: 'pointer', marginTop: '0.5rem' }}
+                >
+                  <option value="">-- Elija un proyecto disponible --</option>
+                  {projectsList.map(p => (
+                    <option key={p.id || 0} value={p.id}>{p.title} ({p.community_name})</option>
+                  ))}
+                </select>
               </div>
             </div>
+
+            {selectedGanttProject && (
+              <div style={{ marginTop: '1rem' }}>
+                <ProjectSchedule projectId={selectedGanttProject} token={token} />
+              </div>
+            )}
           </div>
         )}
 
