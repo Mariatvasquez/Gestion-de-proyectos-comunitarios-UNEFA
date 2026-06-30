@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import ActaModal from './ActaModal';
+import ProjectSchedule from './ProjectSchedule';
 
 const API_BASE = 'http://localhost:5000/api';
 
 export default function CoordinatorDashboard({ user, token }) {
   const [stats, setStats] = useState({ activeStudents: 0, activeProjects: 0, completedStudents: 0 });
+  const [vistaActiva, setVistaActiva] = useState('estadisticas');
   const [users, setUsers] = useState([]);
   const [milestones, setMilestones] = useState([]);
   const [activities, setActivities] = useState([]);
@@ -30,6 +33,10 @@ export default function CoordinatorDashboard({ user, token }) {
   const [userFormError, setUserFormError] = useState('');
   const [userFormSuccess, setUserFormSuccess] = useState('');
   const [expandedCoordProjects, setExpandedCoordProjects] = useState({});
+  // -- NUEVOS ESTADOS PARA EL ACTA EN PDF --
+  const [mostrarModal, setMostrarModal] = useState(false);
+  const [proyectoSeleccionado, setProyectoSeleccionado] = useState(null);
+  // ----------------------------------------
 
   const toggleCoordProject = (pid) => {
     setExpandedCoordProjects(prev => ({
@@ -39,7 +46,7 @@ export default function CoordinatorDashboard({ user, token }) {
   };
 
   // Formulario Hito (Add)
-  const [milestoneFormData, setMilestoneFormData] = useState({ title: '', event_date: '' });
+  const [milestoneFormData, setMilestoneFormData] = useState({ title: '', event_date: '', project_id: '' });
   const [milestoneSuccess, setMilestoneSuccess] = useState('');
 
   // Cargar datos
@@ -211,7 +218,7 @@ export default function CoordinatorDashboard({ user, token }) {
   const handleMilestoneSubmit = async (e) => {
     e.preventDefault();
     setMilestoneSuccess('');
-    if (!milestoneFormData.title || !milestoneFormData.event_date) return;
+    if (!milestoneFormData.title || !milestoneFormData.event_date || !milestoneFormData.project_id) return;
 
     try {
       const res = await fetch(`${API_BASE}/admin/cronograma`, {
@@ -225,7 +232,7 @@ export default function CoordinatorDashboard({ user, token }) {
       
       if (res.ok) {
         setMilestoneSuccess('✅ Hito académico agregado.');
-        setMilestoneFormData({ title: '', event_date: '' });
+        setMilestoneFormData({ title: '', event_date: '', project_id: '' });
         loadData();
       }
     } catch (err) {
@@ -411,190 +418,315 @@ export default function CoordinatorDashboard({ user, token }) {
           </div>
         </div>
 
-        {/* Widgets de Estadísticas Express */}
-        <div className="no-print" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', margin: '2rem 0' }}>
-          <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', alignItems: 'center', gap: '1.2rem', background: 'white' }}>
-            <div style={{ background: 'rgba(12, 35, 64, 0.08)', width: '60px', height: '60px', borderRadius: '15px', display: 'flex', justifyContent: 'center', alignItems: 'center', color: 'var(--unefa-navy)', fontSize: '1.8rem' }}>
-              <i className="fa-solid fa-users"></i>
-            </div>
-            <div>
-              <span style={{ display: 'block', fontSize: '1.8rem', fontWeight: '800', color: 'var(--unefa-navy)', lineHeight: 1.2 }}>{stats.activeStudents}</span>
-              <span style={{ fontSize: '0.85rem', fontWeight: 600, opacity: 0.8 }}>Alumnos Activos</span>
-            </div>
-          </div>
-
-          <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', alignItems: 'center', gap: '1.2rem', background: 'white' }}>
-            <div style={{ background: 'rgba(197, 160, 89, 0.1)', width: '60px', height: '60px', borderRadius: '15px', display: 'flex', justifyContent: 'center', alignItems: 'center', color: 'var(--unefa-gold)', fontSize: '1.8rem' }}>
-              <i className="fa-solid fa-clipboard-list"></i>
-            </div>
-            <div>
-              <span style={{ display: 'block', fontSize: '1.8rem', fontWeight: '800', color: 'var(--unefa-navy)', lineHeight: 1.2 }}>{stats.activeProjects}</span>
-              <span style={{ fontSize: '0.85rem', fontWeight: 600, opacity: 0.8 }}>Proyectos Comunitarios</span>
-            </div>
-          </div>
-
-          <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', alignItems: 'center', gap: '1.2rem', background: 'white' }}>
-            <div style={{ background: 'rgba(16, 185, 129, 0.1)', width: '60px', height: '60px', borderRadius: '15px', display: 'flex', justifyContent: 'center', alignItems: 'center', color: 'var(--status-approved)', fontSize: '1.8rem' }}>
-              <i className="fa-solid fa-award"></i>
-            </div>
-            <div>
-              <span style={{ display: 'block', fontSize: '1.8rem', fontWeight: '800', color: 'var(--unefa-navy)', lineHeight: 1.2 }}>{stats.completedStudents}</span>
-              <span style={{ fontSize: '0.85rem', fontWeight: 600, opacity: 0.8 }}>120 Horas Completadas</span>
-            </div>
-          </div>
+        {/* Menú de Navegación por Pestañas */}
+        <div className="glass-panel no-print" style={{ 
+          display: 'flex', 
+          gap: '0.8rem', 
+          padding: '0.6rem', 
+          borderRadius: '12px', 
+          margin: '1.5rem 0',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          background: 'rgba(255, 255, 255, 0.5)',
+          border: '1px solid rgba(255, 255, 255, 0.6)',
+          backdropFilter: 'blur(10px)',
+          boxShadow: 'var(--shadow-premium)'
+        }}>
+          <button 
+            onClick={() => setVistaActiva('estadisticas')}
+            style={{
+              flex: '1 1 200px',
+              padding: '0.8rem 1rem',
+              borderRadius: '8px',
+              border: 'none',
+              background: vistaActiva === 'estadisticas' ? 'var(--unefa-navy)' : 'transparent',
+              color: vistaActiva === 'estadisticas' ? '#fff' : 'var(--unefa-navy)',
+              fontFamily: 'var(--font-header)',
+              fontWeight: 700,
+              fontSize: '0.9rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
+              transition: 'all 0.2s ease-in-out',
+              boxShadow: vistaActiva === 'estadisticas' ? '0 4px 15px rgba(12, 35, 64, 0.15)' : 'none'
+            }}
+          >
+            <i className="fa-solid fa-chart-simple"></i> Inicio (Estadísticas)
+          </button>
+          <button 
+            onClick={() => setVistaActiva('proyectos')}
+            style={{
+              flex: '1 1 200px',
+              padding: '0.8rem 1rem',
+              borderRadius: '8px',
+              border: 'none',
+              background: vistaActiva === 'proyectos' ? 'var(--unefa-navy)' : 'transparent',
+              color: vistaActiva === 'proyectos' ? '#fff' : 'var(--unefa-navy)',
+              fontFamily: 'var(--font-header)',
+              fontWeight: 700,
+              fontSize: '0.9rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
+              transition: 'all 0.2s ease-in-out',
+              boxShadow: vistaActiva === 'proyectos' ? '0 4px 15px rgba(12, 35, 64, 0.15)' : 'none'
+            }}
+          >
+            <i className="fa-solid fa-folder-tree"></i> Proyectos y Actas
+          </button>
+          <button 
+            onClick={() => setVistaActiva('usuarios')}
+            style={{
+              flex: '1 1 200px',
+              padding: '0.8rem 1rem',
+              borderRadius: '8px',
+              border: 'none',
+              background: vistaActiva === 'usuarios' ? 'var(--unefa-navy)' : 'transparent',
+              color: vistaActiva === 'usuarios' ? '#fff' : 'var(--unefa-navy)',
+              fontFamily: 'var(--font-header)',
+              fontWeight: 700,
+              fontSize: '0.9rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
+              transition: 'all 0.2s ease-in-out',
+              boxShadow: vistaActiva === 'usuarios' ? '0 4px 15px rgba(12, 35, 64, 0.15)' : 'none'
+            }}
+          >
+            <i className="fa-solid fa-users-gear"></i> Usuarios (CRUD)
+          </button>
+          <button 
+            onClick={() => setVistaActiva('cronograma')}
+            style={{
+              flex: '1 1 200px',
+              padding: '0.8rem 1rem',
+              borderRadius: '8px',
+              border: 'none',
+              background: vistaActiva === 'cronograma' ? 'var(--unefa-navy)' : 'transparent',
+              color: vistaActiva === 'cronograma' ? '#fff' : 'var(--unefa-navy)',
+              fontFamily: 'var(--font-header)',
+              fontWeight: 700,
+              fontSize: '0.9rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
+              transition: 'all 0.2s ease-in-out',
+              boxShadow: vistaActiva === 'cronograma' ? '0 4px 15px rgba(12, 35, 64, 0.15)' : 'none'
+            }}
+          >
+            <i className="fa-solid fa-calendar-days"></i> Cronograma
+          </button>
         </div>
 
-        {/* SECCIÓN DE MONITOREO DE PROYECTOS COMUNITARIOS ACTIVOS */}
-        <div className="no-print" style={{ marginBottom: '2rem' }}>
-          <div className="glass-panel" style={{ padding: '1.8rem', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-            <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--unefa-navy)' }}>
-              <i className="fa-solid fa-folder-tree" style={{ color: 'var(--unefa-gold)' }}></i>
-              Monitoreo de Proyectos Comunitarios Activos
-            </h3>
-            
-            {projectsList.length === 0 ? (
-              <p style={{ fontSize: '0.9rem', opacity: 0.7, textAlign: 'center', padding: '1rem' }}>No hay proyectos comunitarios activos registrados.</p>
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.2rem' }}>
-                {projectsList.map(project => {
-                  const pid = project.id || 0;
-                  const isExpanded = !!expandedCoordProjects[pid];
-                  
-                  return (
-                    <div 
-                      key={pid} 
-                      style={{ 
-                        background: 'white', 
-                        border: '1px solid #E2E8F0', 
-                        borderRadius: '12px', 
-                        overflow: 'hidden', 
-                        boxShadow: '0 2px 5px rgba(0,0,0,0.01)' 
-                      }}
-                    >
-                      {/* Cabecera de Proyecto */}
+        {/* Sub-views Condicionales */}
+        
+        {/* VISTA 1: ESTADÍSTICAS */}
+        {vistaActiva === 'estadisticas' && (
+          <div className="no-print" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem', margin: '2rem 0' }}>
+            <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', alignItems: 'center', gap: '1.2rem', background: 'white' }}>
+              <div style={{ background: 'rgba(12, 35, 64, 0.08)', width: '60px', height: '60px', borderRadius: '15px', display: 'flex', justifyContent: 'center', alignItems: 'center', color: 'var(--unefa-navy)', fontSize: '1.8rem' }}>
+                <i className="fa-solid fa-users"></i>
+              </div>
+              <div>
+                <span style={{ display: 'block', fontSize: '1.8rem', fontWeight: '800', color: 'var(--unefa-navy)', lineHeight: 1.2 }}>{stats.activeStudents}</span>
+                <span style={{ fontSize: '0.85rem', fontWeight: 600, opacity: 0.8 }}>Alumnos Activos</span>
+              </div>
+            </div>
+
+            <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', alignItems: 'center', gap: '1.2rem', background: 'white' }}>
+              <div style={{ background: 'rgba(197, 160, 89, 0.1)', width: '60px', height: '60px', borderRadius: '15px', display: 'flex', justifyContent: 'center', alignItems: 'center', color: 'var(--unefa-gold)', fontSize: '1.8rem' }}>
+                <i className="fa-solid fa-clipboard-list"></i>
+              </div>
+              <div>
+                <span style={{ display: 'block', fontSize: '1.8rem', fontWeight: '800', color: 'var(--unefa-navy)', lineHeight: 1.2 }}>{stats.activeProjects}</span>
+                <span style={{ fontSize: '0.85rem', fontWeight: 600, opacity: 0.8 }}>Proyectos Comunitarios</span>
+              </div>
+            </div>
+
+            <div className="glass-panel" style={{ padding: '1.5rem', display: 'flex', alignItems: 'center', gap: '1.2rem', background: 'white' }}>
+              <div style={{ background: 'rgba(16, 185, 129, 0.1)', width: '60px', height: '60px', borderRadius: '15px', display: 'flex', justifyContent: 'center', alignItems: 'center', color: 'var(--status-approved)', fontSize: '1.8rem' }}>
+                <i className="fa-solid fa-award"></i>
+              </div>
+              <div>
+                <span style={{ display: 'block', fontSize: '1.8rem', fontWeight: '800', color: 'var(--unefa-navy)', lineHeight: 1.2 }}>{stats.completedStudents}</span>
+                <span style={{ fontSize: '0.85rem', fontWeight: 600, opacity: 0.8 }}>120 Horas Completadas</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* VISTA 2: PROYECTOS Y ACTAS */}
+        {vistaActiva === 'proyectos' && (
+          <div className="no-print" style={{ marginBottom: '2rem' }}>
+            <div className="glass-panel" style={{ padding: '1.8rem', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--unefa-navy)' }}>
+                <i className="fa-solid fa-folder-tree" style={{ color: 'var(--unefa-gold)' }}></i>
+                Monitoreo de Proyectos Comunitarios Activos
+              </h3>
+              
+              {projectsList.length === 0 ? (
+                <p style={{ fontSize: '0.9rem', opacity: 0.7, textAlign: 'center', padding: '1rem' }}>No hay proyectos comunitarios activos registrados.</p>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.2rem' }}>
+                  {projectsList.map(project => {
+                    const pid = project.id || 0;
+                    const isExpanded = !!expandedCoordProjects[pid];
+                    
+                    return (
                       <div 
-                        onClick={() => toggleCoordProject(pid)}
-                        style={{
-                          background: 'rgba(12, 35, 64, 0.02)',
-                          padding: '0.9rem 1.1rem',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          cursor: 'pointer',
-                          borderBottom: isExpanded ? '1px solid #E2E8F0' : 'none'
+                        key={pid} 
+                        style={{ 
+                          background: 'white', 
+                          border: '1px solid #E2E8F0', 
+                          borderRadius: '12px', 
+                          overflow: 'hidden', 
+                          boxShadow: '0 2px 5px rgba(0,0,0,0.01)' 
                         }}
                       >
-                        <div style={{ textAlign: 'left', flex: 1, paddingRight: '0.5rem' }}>
-                          <h4 style={{ fontSize: '0.88rem', color: 'var(--unefa-navy)', fontWeight: 700, margin: 0, lineHeight: 1.3 }}>
-                            {project.title}
-                          </h4>
-                          <span style={{ fontSize: '0.7rem', opacity: 0.7, display: 'block', marginTop: '0.1rem' }}>
-                            Comunidad: {project.community_name}
-                          </span>
+                        {/* Cabecera de Proyecto */}
+                        <div 
+                          onClick={() => toggleCoordProject(pid)}
+                          style={{
+                            background: 'rgba(12, 35, 64, 0.02)',
+                            padding: '0.9rem 1.1rem',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            cursor: 'pointer',
+                            borderBottom: isExpanded ? '1px solid #E2E8F0' : 'none'
+                          }}
+                        >
+                          <div style={{ textAlign: 'left', flex: 1, paddingRight: '0.5rem' }}>
+                            <h4 style={{ fontSize: '0.88rem', color: 'var(--unefa-navy)', fontWeight: 700, margin: 0, lineHeight: 1.3 }}>
+                              {project.title}
+                            </h4>
+                            <span style={{ fontSize: '0.7rem', opacity: 0.7, display: 'block', marginTop: '0.1rem' }}>
+                              Comunidad: {project.community_name}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span style={{ fontSize: '0.65rem', background: 'var(--unefa-navy)', color: 'white', padding: '0.15rem 0.4rem', borderRadius: '10px', fontWeight: 'bold' }}>
+                              {project.students.length} Est.
+                            </span>
+                            <i 
+                              className={`fa-solid ${isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'}`} 
+                              style={{ color: 'var(--unefa-gold)', fontSize: '0.8rem' }}
+                            ></i>
+                          </div>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <span style={{ fontSize: '0.65rem', background: 'var(--unefa-navy)', color: 'white', padding: '0.15rem 0.4rem', borderRadius: '10px', fontWeight: 'bold' }}>
-                            {project.students.length} Est.
-                          </span>
-                          <i 
-                            className={`fa-solid ${isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'}`} 
-                            style={{ color: 'var(--unefa-gold)', fontSize: '0.8rem' }}
-                          ></i>
-                        </div>
-                      </div>
 
-                      {/* Lista de Estudiantes del Proyecto al expandir */}
-                      {isExpanded && (
-                        <div style={{ padding: '0.8rem', background: '#FAFBFD', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                          {project.students.length === 0 ? (
-                            <p style={{ fontSize: '0.75rem', opacity: 0.6, padding: '0.5rem', textAlign: 'center' }}>No hay estudiantes asignados.</p>
-                          ) : (
-                            project.students.map(student => (
-                              <div 
-                                key={student.id} 
-                                style={{ 
-                                  background: 'white', 
-                                  border: '1px solid #E2E8F0', 
-                                  borderRadius: '8px', 
-                                  padding: '0.75rem', 
-                                  display: 'flex', 
-                                  flexDirection: 'column', 
-                                  gap: '0.4rem' 
-                                }}
-                              >
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                  <div style={{ textAlign: 'left' }}>
-                                    <h5 style={{ fontSize: '0.82rem', color: 'var(--unefa-navy)', fontWeight: 700, margin: 0 }}>
-                                      {student.name}
-                                    </h5>
-                                    <span style={{ fontSize: '0.68rem', opacity: 0.6 }}>CI: {student.identification}</span>
-                                  </div>
-                                  
-                                  {/* Checkbox de entrega de documentos */}
-                                  <label style={{ 
+                        {/* Lista de Estudiantes del Proyecto al expandir */}
+                        {isExpanded && (
+                          <div style={{ padding: '0.8rem', background: '#FAFBFD', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                            {project.students.length === 0 ? (
+                              <p style={{ fontSize: '0.75rem', opacity: 0.6, padding: '0.5rem', textAlign: 'center' }}>No hay estudiantes asignados.</p>
+                            ) : (
+                              project.students.map(student => (
+                                <div 
+                                  key={student.id} 
+                                  style={{ 
+                                    background: 'white', 
+                                    border: '1px solid #E2E8F0', 
+                                    borderRadius: '8px', 
+                                    padding: '0.75rem', 
                                     display: 'flex', 
-                                    alignItems: 'center', 
-                                    gap: '0.3rem', 
-                                    fontSize: '0.7rem', 
-                                    fontWeight: 700, 
-                                    cursor: 'pointer', 
-                                    color: student.docs_submitted ? 'var(--status-approved)' : '#64748B',
-                                    background: student.docs_submitted ? 'rgba(16, 185, 129, 0.08)' : 'rgba(100, 116, 139, 0.08)',
-                                    padding: '0.2rem 0.5rem',
-                                    borderRadius: '6px'
-                                  }}>
-                                    <input 
-                                      type="checkbox" 
-                                      checked={student.docs_submitted} 
-                                      onChange={() => handleToggleDocs(student.id, student.docs_submitted)}
-                                      style={{ cursor: 'pointer', margin: 0 }}
-                                    />
-                                    {student.docs_submitted ? 'Docs Consignados' : 'Docs Pendientes'}
-                                  </label>
-                                </div>
+                                    flexDirection: 'column', 
+                                    gap: '0.4rem' 
+                                  }}
+                                >
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div style={{ textAlign: 'left' }}>
+                                      <h5 style={{ fontSize: '0.82rem', color: 'var(--unefa-navy)', fontWeight: 700, margin: 0 }}>
+                                        {student.name}
+                                      </h5>
+                                      <span style={{ fontSize: '0.68rem', opacity: 0.6 }}>CI: {student.identification}</span>
+                                    </div>
+                                    
+                                    {/* Checkbox de entrega de documentos */}
+                                    <label style={{ 
+                                      display: 'flex', 
+                                      alignItems: 'center', 
+                                      gap: '0.3rem', 
+                                      fontSize: '0.7rem', 
+                                      fontWeight: 700, 
+                                      cursor: 'pointer', 
+                                      color: student.docs_submitted ? 'var(--status-approved)' : '#64748B',
+                                      background: student.docs_submitted ? 'rgba(16, 185, 129, 0.08)' : 'rgba(100, 116, 139, 0.08)',
+                                      padding: '0.2rem 0.5rem',
+                                      borderRadius: '6px'
+                                    }}>
+                                      <input 
+                                        type="checkbox" 
+                                        checked={student.docs_submitted} 
+                                        onChange={() => handleToggleDocs(student.id, student.docs_submitted)}
+                                        style={{ cursor: 'pointer', margin: 0 }}
+                                      />
+                                      {student.docs_submitted ? 'Docs Consignados' : 'Docs Pendientes'}
+                                    </label>
+                                  </div>
 
-                                {/* Barra de horas */}
-                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', fontWeight: 600, marginBottom: '0.1rem' }}>
-                                  <span>Progreso:</span>
-                                  <span style={{ color: 'var(--status-approved)' }}>
-                                    {student.approvedHours} / 120 hrs ({student.progressPercentage}%)
-                                  </span>
+                                  {/* Barra de horas */}
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.7rem', fontWeight: 600, marginBottom: '0.1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                    <span>Progreso:</span>
+                                    <span style={{ color: 'var(--status-approved)' }}>
+                                      {student.approvedHours} / 120 hrs ({student.progressPercentage}%)
+                                    </span>
+                                    <button 
+                                      onClick={(e) => {
+                                        e.stopPropagation(); // Evita que se cierre la tarjeta
+                                        setProyectoSeleccionado(pid); // Usa el pid correcto
+                                        setMostrarModal(true); // Abre el modal
+                                      }}
+                                      className="btn-primary" 
+                                      style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', borderRadius: '5px' }}
+                                    >
+                                      <i className="fa-solid fa-file-pdf" style={{ marginRight: '5px' }}></i>
+                                      Generar Acta
+                                    </button>
+                                  </div>
+                                  <div className="progress-bar-container" style={{ height: '6px', borderRadius: '3px' }}>
+                                    <div 
+                                      className="progress-bar-fill" 
+                                      style={{ 
+                                        width: `${student.progressPercentage}%`,
+                                        borderRadius: '3px',
+                                        background: student.approvedHours >= 120 ? 'linear-gradient(90deg, #10B981, #059669)' : 'linear-gradient(90deg, #3B82F6, #1D4ED8)'
+                                      }}
+                                    ></div>
+                                  </div>
                                 </div>
-                                <div className="progress-bar-container" style={{ height: '6px', borderRadius: '3px' }}>
-                                  <div 
-                                    className="progress-bar-fill" 
-                                    style={{ 
-                                      width: `${student.progressPercentage}%`,
-                                      borderRadius: '3px',
-                                      background: student.approvedHours >= 120 ? 'linear-gradient(90deg, #10B981, #059669)' : 'linear-gradient(90deg, #3B82F6, #1D4ED8)'
-                                    }}
-                                  ></div>
-                                </div>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                              ))
+                            )}
+                            <ProjectSchedule projectId={pid} token={token} />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Cuerpo del Panel */}
-        <div className="no-print" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '2rem' }}>
-          
-          {/* CRUD GENERAL DE USUARIOS (Izquierda) */}
-          <div className="glass-panel" style={{ padding: '1.8rem', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+        {/* VISTA 3: USUARIOS */}
+        {vistaActiva === 'usuarios' && (
+          <div className="glass-panel no-print" style={{ padding: '1.8rem', display: 'flex', flexDirection: 'column', gap: '1.2rem', marginBottom: '2rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
               <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <i className="fa-solid fa-users-gear" style={{ color: 'var(--unefa-gold)' }}></i>
                 Gestor General de Usuarios
               </h3>
 
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                 <input 
                   type="text" 
                   placeholder="Buscar usuario..." 
@@ -688,7 +820,7 @@ export default function CoordinatorDashboard({ user, token }) {
                   </select>
                 </div>
 
-                 {userFormData.role === 'student' && (
+                {userFormData.role === 'student' && (
                   <>
                     <div className="form-group" style={{ marginBottom: 0 }}>
                       <label className="form-label" style={{ fontSize: '0.75rem' }}>Tutor Asignado</label>
@@ -885,9 +1017,11 @@ export default function CoordinatorDashboard({ user, token }) {
             </div>
 
           </div>
+        )}
 
-          {/* GESTOR DEL CRONOGRAMA ACADÉMICO (Derecha) */}
-          <div className="glass-panel" style={{ padding: '1.8rem', display: 'flex', flexDirection: 'column', gap: '1.2rem', justifySelf: 'flex-start' }}>
+        {/* VISTA 4: CRONOGRAMA */}
+        {vistaActiva === 'cronograma' && (
+          <div className="glass-panel no-print" style={{ padding: '1.8rem', display: 'flex', flexDirection: 'column', gap: '1.2rem', marginBottom: '2rem' }}>
             <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <i className="fa-solid fa-calendar-days" style={{ color: 'var(--unefa-gold)' }}></i>
               Gestor del Cronograma
@@ -899,83 +1033,111 @@ export default function CoordinatorDashboard({ user, token }) {
               </div>
             )}
 
-            <form onSubmit={handleMilestoneSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label" style={{ fontSize: '0.8rem' }}>Título del Hito Académico</label>
-                <input 
-                  type="text" 
-                  placeholder="Ej. Taller de Inducción"
-                  value={milestoneFormData.title}
-                  onChange={(e) => setMilestoneFormData(prev => ({ ...prev, title: e.target.value }))}
-                  className="form-control"
-                  style={{ padding: '0.45rem 0.8rem', fontSize: '0.85rem' }}
-                  required
-                />
-              </div>
-
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label" style={{ fontSize: '0.8rem' }}>Fecha de Ejecución</label>
-                <input 
-                  type="date" 
-                  value={milestoneFormData.event_date}
-                  onChange={(e) => setMilestoneFormData(prev => ({ ...prev, event_date: e.target.value }))}
-                  className="form-control"
-                  style={{ padding: '0.45rem 0.8rem', fontSize: '0.85rem' }}
-                  required
-                />
-              </div>
-
-              <button type="submit" className="btn-primary" style={{ justifyContent: 'center', padding: '0.5rem' }}>
-                <i className="fa-solid fa-plus"></i> Agregar Hito
-              </button>
-            </form>
-
-            <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: '1rem', marginTop: '0.5rem' }}>
-              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--unefa-navy)', display: 'block', marginBottom: '0.6rem' }}>
-                Hitos Programados:
-              </span>
-
-              {milestones.length === 0 ? (
-                <p style={{ fontSize: '0.8rem', opacity: 0.7 }}>No hay hitos programados.</p>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-                  {milestones.map(ms => (
-                    <div 
-                      key={ms.id} 
-                      style={{ 
-                        background: 'white', 
-                        border: '1px solid #E2E8F0', 
-                        borderRadius: '8px', 
-                        padding: '0.6rem 0.8rem',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center'
-                      }}
-                    >
-                      <div>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--unefa-gold)' }}>
-                          {new Date(ms.event_date).toLocaleDateString('es-ES', { timeZone: 'UTC' })}
-                        </span>
-                        <h4 style={{ fontSize: '0.85rem', margin: 0, color: 'var(--unefa-navy)' }}>{ms.title}</h4>
-                      </div>
-                      <button 
-                        className="btn-secondary" 
-                        style={{ padding: '0.2rem 0.4rem', border: 'none', background: 'transparent', color: 'var(--status-correct)', cursor: 'pointer' }}
-                        onClick={() => handleDeleteMilestone(ms.id)}
-                      >
-                        <i className="fa-solid fa-trash-can"></i>
-                      </button>
-                    </div>
-                  ))}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem' }}>
+              {/* Formulario rápido */}
+              <form onSubmit={handleMilestoneSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label" style={{ fontSize: '0.8rem' }}>Título del Hito Académico</label>
+                  <input 
+                    type="text" 
+                    placeholder="Ej. Taller de Inducción"
+                    value={milestoneFormData.title}
+                    onChange={(e) => setMilestoneFormData(prev => ({ ...prev, title: e.target.value }))}
+                    className="form-control"
+                    style={{ padding: '0.45rem 0.8rem', fontSize: '0.85rem' }}
+                    required
+                  />
                 </div>
-              )}
+
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label" style={{ fontSize: '0.8rem' }}>Fecha de Ejecución</label>
+                  <input 
+                    type="date" 
+                    value={milestoneFormData.event_date}
+                    onChange={(e) => setMilestoneFormData(prev => ({ ...prev, event_date: e.target.value }))}
+                    className="form-control"
+                    style={{ padding: '0.45rem 0.8rem', fontSize: '0.85rem' }}
+                    required
+                  />
+                </div>
+
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label" style={{ fontSize: '0.8rem' }}>Proyecto Vinculado</label>
+                  <select
+                    value={milestoneFormData.project_id}
+                    onChange={(e) => setMilestoneFormData(prev => ({ ...prev, project_id: e.target.value }))}
+                    className="form-control"
+                    style={{ padding: '0.45rem 0.8rem', fontSize: '0.85rem', cursor: 'pointer' }}
+                    required
+                  >
+                    <option value="">Seleccione un Proyecto</option>
+                    {projectsList.map(p => (
+                      <option key={p.id || 0} value={p.id}>{p.title}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <button type="submit" className="btn-primary" style={{ justifyContent: 'center', padding: '0.5rem' }}>
+                  <i className="fa-solid fa-plus"></i> Agregar Hito
+                </button>
+              </form>
+
+              {/* Lista lateral de hitos */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', padding: '1.2rem', background: 'rgba(12, 35, 64, 0.02)', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--unefa-navy)', display: 'block', marginBottom: '0.2rem' }}>
+                  Hitos Programados:
+                </span>
+
+                {milestones.length === 0 ? (
+                  <p style={{ fontSize: '0.8rem', opacity: 0.7 }}>No hay hitos programados.</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', maxHeight: '400px', overflowY: 'auto', paddingRight: '0.3rem' }}>
+                    {milestones.map(ms => (
+                      <div 
+                        key={ms.id} 
+                        style={{ 
+                          background: 'white', 
+                          border: '1px solid #E2E8F0', 
+                          borderRadius: '8px', 
+                          padding: '0.6rem 0.8rem',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center'
+                        }}
+                      >
+                        <div>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--unefa-gold)' }}>
+                            {new Date(ms.event_date).toLocaleDateString('es-ES', { timeZone: 'UTC' })}
+                          </span>
+                          <h4 style={{ fontSize: '0.85rem', margin: 0, color: 'var(--unefa-navy)' }}>{ms.title}</h4>
+                        </div>
+                        <button 
+                          className="btn-secondary" 
+                          style={{ padding: '0.2rem 0.4rem', border: 'none', background: 'transparent', color: 'var(--status-correct)', cursor: 'pointer' }}
+                          onClick={() => handleDeleteMilestone(ms.id)}
+                        >
+                          <i className="fa-solid fa-trash-can"></i>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-
-        </div>
+        )}
 
       </div>
+
+      {/* Modal de Acta de Aprobación (Renderizado único a nivel raíz de dashboard) */}
+      {mostrarModal && (
+        <ActaModal 
+          projectId={proyectoSeleccionado} 
+          onClose={() => setMostrarModal(false)} 
+        />
+      )}
 
     </div>
   );
 }
+

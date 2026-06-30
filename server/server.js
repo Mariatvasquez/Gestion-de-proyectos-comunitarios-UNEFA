@@ -7,6 +7,7 @@ import authRouter from './routes/auth.js';
 import reportesRouter from './routes/reportes.js';
 import cronogramaRouter from './routes/cronograma.js';
 import proyectosRouter from './routes/proyectos.js';
+import projectSchedulesRouter from './routes/projectSchedules.js';
 import tutorRouter from './routes/tutor.js';
 import adminRouter from './routes/admin.js';
 
@@ -30,6 +31,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/reportes', reportesRouter);
 app.use('/api/cronograma', cronogramaRouter);
 app.use('/api/proyectos-historicos', proyectosRouter);
+app.use('/api/proyectos', projectSchedulesRouter);
 app.use('/api/estudiantes', tutorRouter);
 app.use('/api/admin', adminRouter);
 

@@ -201,10 +201,12 @@ export default function Login({ onLoginSuccess }) {
                   fontSize: '1.1rem'
                 }}></i>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   placeholder="Número de cédula"
                   value={docNumber}
-                  onChange={(e) => setDocNumber(e.target.value)}
+                  onChange={(e) => setDocNumber(e.target.value.replace(/\D/g, ''))}
                   className="form-control"
                   style={{
                     width: '100%',

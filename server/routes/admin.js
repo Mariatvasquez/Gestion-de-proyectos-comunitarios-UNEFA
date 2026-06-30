@@ -289,14 +289,14 @@ router.get('/proyectos-estudiantes', async (req, res) => {
 router.post('/cronograma', async (req, res) => {
   const { title, event_date, project_id } = req.body;
 
-  if (!title || !event_date) {
-    return res.status(400).json({ error: 'El título y la fecha son obligatorios.' });
+  if (!title || !event_date || !project_id) {
+    return res.status(400).json({ error: 'El título, la fecha y el proyecto (project_id) son obligatorios.' });
   }
 
   try {
     const result = await db.query(
       'INSERT INTO milestones (title, event_date, project_id) VALUES ($1, $2, $3) RETURNING *',
-      [title, event_date, project_id ? parseInt(project_id) : null]
+      [title, event_date, parseInt(project_id)]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {

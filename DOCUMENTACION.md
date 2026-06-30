@@ -15,15 +15,16 @@ El proyecto se divide en dos directorios principales:
 ```text
 Control Proyectos comunitarios/
 ├── client/                     # Código del Frontend (React + Vite)
-│   ├── public/                 # Recursos públicos estáticos
+│   ├── public/                 # Recursos públicos estáticos (favicon, etc.)
 │   ├── src/
-│   │   ├── assets/             # Imágenes y logos
+│   │   ├── assets/             # Recursos estáticos locales
 │   │   ├── components/         # Componentes y Dashboards de la interfaz
+│   │   │   ├── ActaModal.jsx             # Modal de configuración y descarga del acta PDF
 │   │   │   ├── CoordinatorDashboard.jsx  # Interfaz del Coordinador General
 │   │   │   ├── Header.jsx                # Encabezado dinámico de sesión
-│   │   │   ├── Login.jsx                 # Pantalla de Login Premium
-│   │   │   ├── StudentDashboard.jsx      # Interfaz del Estudiante
-│   │   │   └── TutorDashboard.jsx        # Interfaz de Supervisión del Tutor
+│   │   │   ├── Login.jsx                 # Pantalla de Login Premium (Cédula numérica)
+│   │   │   ├── StudentDashboard.jsx      # Interfaz del Estudiante (Bitácoras, Hitos)
+│   │   │   └── TutorDashboard.jsx        # Interfaz de Supervisión del Tutor (Auditorías)
 │   │   ├── App.css             # Estilos de componentes específicos
 │   │   ├── App.jsx             # Contenedor principal y enrutador lógico
 │   │   ├── index.css           # Hoja de estilos global, tokens y Glassmorphism
@@ -32,6 +33,9 @@ Control Proyectos comunitarios/
 │   ├── package.json            # Dependencias del cliente (React, FontAwesome, etc.)
 │   └── vite.config.js          # Configuración de Vite
 ├── server/                     # Código del Backend (Node.js + Express)
+│   ├── assets/                 # Recursos gráficos institucionales (Logotipos)
+│   │   ├── logo_ministerio.jpg # Logotipo del Ministerio en formato JPG
+│   │   └── logo_unefa.svg      # Logotipo de la UNEFA en formato vectorial SVG
 │   ├── db/
 │   │   ├── index.js            # Configuración del Pool de PostgreSQL (pg)
 │   │   └── schema.sql          # Estructura e inserciones semilla de la base de datos
@@ -42,10 +46,10 @@ Control Proyectos comunitarios/
 │   │   ├── auth.js             # Registro, Login y verificación del token
 │   │   ├── cronograma.js       # Consulta del calendario académico
 │   │   ├── proyectos.js        # Buscador de proyectos históricos
-│   │   ├── reportes.js         # Creación, edición y evaluación de bitácoras
+│   │   ├── reportes.js         # Rutas de bitácoras y generación de PDF final (Actas)
 │   │   └── tutor.js            # Consulta de estudiantes asignados al tutor
 │   ├── .env                    # Configuración de variables de entorno
-│   ├── package.json            # Dependencias del servidor (Express, pg, JWT, Bcrypt)
+│   ├── package.json            # Dependencias del servidor (Express, pg, JWT, Bcrypt, PDFKit, svg-to-pdfkit)
 │   └── server.js               # Punto de entrada y servidor Express
 └── DOCUMENTACION.md            # Este documento explicativo
 ```
@@ -56,6 +60,12 @@ Control Proyectos comunitarios/
 
 El archivo [`server/db/schema.sql`](file:///c:/Users/Maria%20Vasquez/Desktop/Control%20Proyectos%20comunitarios/server/db/schema.sql) define la estructura de las tablas de datos para el motor PostgreSQL 17:
 
+### Tabla: `current_projects`
+Define los proyectos comunitarios activos en los que participan los estudiantes.
+*   `id` (SERIAL PRIMARY KEY): Identificador único.
+*   `title` (VARCHAR): Nombre del proyecto.
+*   `community_name` (VARCHAR): Nombre de la comunidad beneficiada.
+
 ### Tabla: `users`
 Almacena la información de todos los usuarios (Estudiantes, Tutores y Coordinadores).
 *   `id` (SERIAL PRIMARY KEY): Identificador único.
@@ -63,9 +73,12 @@ Almacena la información de todos los usuarios (Estudiantes, Tutores y Coordinad
 *   `identification` (VARCHAR UNIQUE): Cédula de identidad nacional (clave de inicio de sesión).
 *   `major` (VARCHAR): Carrera a la que pertenece el usuario.
 *   `role` (VARCHAR): Rol en el sistema, limitado mediante `CHECK` a: `'student'` (estudiante), `'tutor'` (tutor académico) o `'coordinator'` (coordinador general).
-*   `password_hash` (VARCHAR): Contraseña encriptada unidireccionalmente con `bcrypt`.
+*   `password_hash` (VARCHAR): Contraseña encriptada con `bcrypt`.
 *   `active` (BOOLEAN DEFAULT TRUE): Estado de la cuenta (permite dar de baja usuarios sin borrar su historial).
-*   `tutor_id` (INTEGER REFERENCES `users(id)`): Relación reflexiva que vincula a un estudiante con su tutor asignado.
+*   `tutor_id` (INTEGER REFERENCES `users(id)`): Vincula a un estudiante con su tutor asignado.
+*   `project_id` (INTEGER REFERENCES `current_projects(id)`): Vincula al estudiante con su proyecto activo.
+*   `docs_submitted` (BOOLEAN): Control de entrega de documentos del estudiante.
+*   `tutor_type` (VARCHAR): Tipo de tutor asignado (`'académico'` o `'institucional'`).
 
 ### Tabla: `activities`
 Almacena el registro individual (bitácoras) de horas de servicio comunitario cargadas por los estudiantes.
@@ -88,6 +101,7 @@ Almacena los hitos del cronograma académico (fechas límite e inducciones).
 *   `id` (SERIAL PRIMARY KEY)
 *   `title` (VARCHAR): Título del hito.
 *   `event_date` (DATE): Fecha pautada para el evento.
+*   `project_id` (INTEGER REFERENCES `current_projects(id)`): Vínculo opcional con un proyecto específico.
 
 ### Tabla: `historical_projects`
 Repositorio de proyectos antiguos para consulta y orientación.
@@ -131,98 +145,58 @@ graph TD
 
 ---
 
-## 4. Componentes del Frontend (React + CSS)
+## 4. Generación de Actas de Evaluación Final en PDF
 
-Las interfaces del sistema son altamente reactivas y adaptadas para cada tipo de actor en la plataforma:
+El sistema posee un módulo de generación de actas académicas en PDF implementado con `pdfkit` y `svg-to-pdfkit` en [reportes.js](file:///c:/Users/Maria%20Vasquez/Desktop/Control%20Proyectos%20comunitarios/server/routes/reportes.js).
+
+### A. Formatos del Acta
+*   **Vertical CON Título de Proyecto (Tipo 1)**: Orientación vertical (`portrait`). Imprime fechas de inicio y culminación y el título largo del proyecto.
+*   **Vertical SIN Título de Proyecto (Tipo 2)**: Orientación vertical (`portrait`). Omite el título del proyecto comunitario.
+*   **Horizontal (Tipo 3)**: Orientación apaisada (`landscape`). Muestra un "Período Académico" (ej. 2026-I) en lugar de fechas exactas.
+
+### B. Elementos del Diseño en PDFKit
+*   **Logotipos en Cabecera**:
+    *   *Izquierda (Ministerio)*: Intenta cargar el archivo de imagen `logo_ministerio.jpg` desde la carpeta `assets`. En caso de fallo o ausencia, utiliza un recuadro de respaldo geométrico.
+    *   *Derecha (UNEFA)*: Intenta leer el archivo vectorial `logo_unefa.svg` de la carpeta `assets`. El sistema realiza una limpieza regex para omitir propiedades de ancho/alto absoluto (ej. `350mm`) para que la librería escale el elemento simétricamente a la caja del viewport (`80x40`) en la cabecera.
+*   **Textos Centrados**: Se definieron márgenes de dibujo estrictos (X=50, ancho de cabecera completo) para forzar a PDFKit a centrar los títulos institucionales en lugar de heredar las coordenadas del logotipo de la derecha.
+*   **Separación de Nombres**: Se incluye un split inteligente sobre el campo único de nombre en base de datos, separando las palabras del estudiante para distribuirlas correctamente en las columnas independientes de `APELLIDOS` y `NOMBRES` requeridas en la tabla de actas.
+*   **Líneas de Firma y Autoridades**:
+    *   *En Formato Horizontal (Tipo 3)*: Imprime una **única firma centrada** al final de la página para el `RESPONSABLE DE PROYECTO COMUNITARIO` (nombre y C.I. ingresados en el modal).
+    *   *En Formatos Verticales (Tipos 1 y 2)*: Imprime **tres firmas**:
+        1.  `Tutor Académico` (Consultado de forma dinámica desde base de datos con nombre y C.I. del docente asignado al proyecto).
+        2.  `Jefe de Área Académica` (Pasado desde el modal, con nombre y C.I.).
+        3.  `Responsable del Servicio Comunitario` (Pasado desde el modal, con nombre y C.I.).
+    *   Todas las firmas incorporan de manera explícita el número de Cédula de identidad debajo de su respectivo cargo.
+
+---
+
+## 5. Componentes del Frontend (React + CSS)
 
 ### A. Enrutador y Sesión: [`client/src/App.jsx`](file:///c:/Users/Maria%20Vasquez/Desktop/Control%20Proyectos%20comunitarios/client/src/App.jsx)
-Es el núcleo del cliente. Al cargarse, busca si existe un token en el `localStorage`. Si lo encuentra, realiza una petición de verificación `/api/auth/me` para recuperar los datos de sesión del usuario.
-*   Si la sesión no existe, renderiza el componente `<Login />`.
-*   Si la sesión es válida, monta el `<Header />` y renderiza de forma condicional el Dashboard correspondiente al rol (`student` -> `<StudentDashboard />`, `tutor` -> `<TutorDashboard />`, `coordinator` -> `<CoordinatorDashboard />`).
+Carga el token desde el `localStorage` y valida la sesión del usuario. Carga de manera dinámica el layout adecuado para Estudiante, Tutor o Coordinador.
 
-### B. Login: [`client/src/components/Login.jsx`](file:///c:/Users/Maria%20Vasquez/Desktop/Control%20Proyectos%20comunitarios/client/src/components/Login.jsx)
-Pantalla de autenticación diseñada con efectos visuales premium (Glassmorphism, desenfoques de fondo y degradados radiales oscuros). Controla de manera interactiva los estados de carga y reporta de inmediato cualquier error de conexión o credenciales erróneas.
+### B. Login y Campo Cédula: [`client/src/components/Login.jsx`](file:///c:/Users/Maria%20Vasquez/Desktop/Control%20Proyectos%20comunitarios/client/src/components/Login.jsx)
+Diseñado con efectos de Glassmorphism. El campo de cédula utiliza `type="text"`, `inputMode="numeric"`, `pattern="[0-9]*"` y un filtro regex en `onChange` para aceptar únicamente caracteres numéricos, **eliminando las flechas (spinners) nativas y desactivando el scroll wheel** que entorpecía el ingreso de datos.
 
-### C. Header: [`client/src/components/Header.jsx`](file:///c:/Users/Maria%20Vasquez/Desktop/Control%20Proyectos%20comunitarios/client/src/components/Header.jsx)
-Barra superior pegajosa (`sticky`) que contiene el isotipo institucional de la UNEFA, el nombre del usuario autenticado, un tag dinámico que representa el rol del usuario (con iconos alusivos) y el botón para cerrar la sesión activa de forma segura.
-
-### D. Panel del Estudiante: [`client/src/components/StudentDashboard.jsx`](file:///c:/Users/Maria%20Vasquez/Desktop/Control%20Proyectos%20comunitarios/client/src/components/StudentDashboard.jsx)
-Este panel se divide en varias secciones funcionales:
-*   **Contadores de Horas**: Resumen de horas aprobadas (verde), pendientes (amarillo) y por corregir (rojo).
-*   **Barra de Progreso**: Muestra visualmente el avance hacia la meta de 120 horas mediante un indicador interactivo enriquecido con una animación de destello lineal (`progress-shimmer`).
-*   **Formulario de Registro/Edición**: Interfaz reactiva con switches interactivos para la asistencia presencial, un bloque para ingresar los datos del aval de la comunidad y la casilla de declaración jurada obligatoria.
-*   **Historial de Bitácoras**: Listado de bitácoras del estudiante con colores según su estado de aprobación. Si una bitácora tiene observaciones, despliega un cuadro de advertencia y el botón de edición.
-*   **Visor de Hitos**: Línea de tiempo que refleja el cronograma académico estipulado por el coordinador.
-*   **Repositorio de Proyectos**: Buscador en tiempo real con filtro por aproximación tipográfica que permite a los estudiantes buscar y guiarse con proyectos de años pasados.
-
-### E. Panel del Tutor: [`client/src/components/TutorDashboard.jsx`](file:///c:/Users/Maria%20Vasquez/Desktop/Control%20Proyectos%20comunitarios/client/src/components/TutorDashboard.jsx)
-Estructurado en un diseño de dos columnas:
-*   **Columna Izquierda (Monitoreo de Alumnos)**: Muestra una tarjeta por cada alumno bajo la tutoría académica del usuario, indicando su nombre, cédula y una barra de progreso que refleja su nivel de avance hacia las 120 horas.
-*   **Columna Derecha (Bandeja de Entrada)**: Listado de bitácoras pendientes de evaluación enviadas por los alumnos. Al hacer clic sobre cualquier elemento de la lista, se carga el detalle en la sección derecha, permitiendo al tutor escribir comentarios en un cuadro de texto y decidir entre aprobar la actividad o solicitar correcciones.
-
-### F. Panel del Coordinador: [`client/src/components/CoordinatorDashboard.jsx`](file:///c:/Users/Maria%20Vasquez/Desktop/Control%20Proyectos%20comunitarios/client/src/components/CoordinatorDashboard.jsx)
-Módulo centralizado para el administrador del sistema:
-*   **Widgets de Métricas**: Indicadores de cantidad total de alumnos en el sistema, proyectos activos e historias de éxito (alumnos con 120 horas acumuladas).
-*   **Gestión de Usuarios (CRUD)**: Formulario dinámico para registrar o editar usuarios. Permite cambiar contraseñas, definir el rol del usuario, asignar a estudiantes su tutor correspondiente y alternar su estado activo/inactivo (`toggle active`).
-*   **Gestión del Cronograma**: Permite crear nuevos hitos de calendario académico especificando fecha de ejecución e inducción o eliminar hitos antiguos.
-*   **Acciones de Reporte y Exportación**:
-    *   *Exportación CSV*: Genera un archivo con codificación UTF-8 compatible con Microsoft Excel, que consolida todas las bitácoras cargadas en el sistema para auditorías externas.
-    *   *Actas Imprimibles*: Utiliza estilos específicos para la impresión. Oculta el entorno web y activa una plantilla de reporte formal membretado de la UNEFA, el cual incluye tablas de datos y líneas de firma oficial para la Coordinadora Rosa Camejo y el Decano del núcleo.
+### C. Modal de Actas: [`client/src/components/ActaModal.jsx`](file:///c:/Users/Maria%20Vasquez/Desktop/Control%20Proyectos%20comunitarios/client/src/components/ActaModal.jsx)
+Se abre desde el Panel de Coordinador al seleccionar un proyecto comunitario activo.
+*   *Formulario Estilizado*: Caja Glassmorphism compacta con transiciones suaves en botones.
+*   *Campos Dinámicos*: Muestra el input de "Período Académico" únicamente si el tipo de acta seleccionado es Horizontal, de lo contrario, solicita "Fecha de Inicio" y "Fecha de Culminación".
+*   *Campos de Autoridades*: Grid compacto de entradas para los nombres y números de Cédula del Jefe de Área Académica y Responsable del Servicio Comunitario (eliminando campos innecesarios como el de Extensión).
+*   *Función de Descarga*: Recopila la información, realiza una petición `POST` al endpoint `/api/reportes/generar-acta` con el JSON correspondiente, procesa la respuesta HTTP como un Blob y descarga el archivo automáticamente en el navegador con un link temporal.
 
 ---
 
-## 5. Endpoints y Lógica del Servidor (API REST)
-
-El backend expone una serie de endpoints estructurados por módulos:
+## 6. Endpoints de la API REST
 
 ### Módulo: Autenticación (`/api/auth`)
-*   `POST /register`: Registra un usuario nuevo en el sistema. Valida unicidad de la cédula y realiza el hash de la contraseña.
-*   `POST /login`: Valida las credenciales del usuario. Si es correcto, firma y devuelve un token JWT junto a los datos básicos del usuario.
-*   `GET /me`: Middleware-protegido. Devuelve los datos actualizados del usuario titular del token enviado en la petición.
+*   `POST /register`: Registra un usuario nuevo en el sistema.
+*   `POST /login`: Valida las credenciales y firma un JWT de sesión.
+*   `GET /me`: Obtiene los datos del usuario en sesión activa.
 
 ### Módulo: Reportes y Bitácoras (`/api/reportes`)
-*   `GET /estudiante`: (Estudiante) Retorna el listado de actividades del alumno autenticado y ejecuta consultas agregadas para calcular sus totales de horas (aprobadas, pendientes, por corregir).
-*   `POST /`: (Estudiante) Agrega una nueva actividad en base de datos.
-*   `PUT /:id`: (Estudiante) Modifica una actividad siempre que su estado sea `'correct'`. Actualiza los campos y cambia el estado a `'pending'`.
-*   `PUT /:id/comentario`: (Tutor) Permite a un tutor cambiar el estado de una actividad a `'approved'` o `'correct'` e insertar el comentario de observación respectivo. Valida que el estudiante de la actividad esté asignado formalmente a dicho tutor en la base de datos.
-
-### Módulo: Cronograma (`/api/cronograma`)
-*   `GET /`: Retorna la lista de hitos académicos registrados por la institución, ordenados de forma ascendente por fecha.
-
-### Módulo: Proyectos Históricos (`/api/proyectos-historicos`)
-*   `GET /`: Permite realizar búsquedas mediante parámetros de consulta (`?query=...`) que filtran proyectos históricos por su título, carrera, comunidad o resumen.
-
-### Módulo: Tutorías (`/api/estudiantes`)
-*   `GET /asignados`: (Tutor) Consulta y devuelve los estudiantes asignados a un tutor en particular y todas las bitácoras de actividades asociadas a ellos.
-
-### Módulo: Administración (`/api/admin`)
-*   `GET /usuarios`: Obtiene la lista completa de todos los usuarios registrados para el panel de administración.
-*   `POST /usuarios`: Crea un usuario en el sistema. Si la contraseña se omite, se le asigna la clave por defecto `"unefa123"`.
-*   `PUT /usuarios/:id`: Modifica la información del usuario (nombre, cédula, carrera, rol, tutor académico y contraseña opcional).
-*   `PUT /usuarios/:id/toggle`: Cambia el estado de activación del usuario (`active`).
-*   `POST /cronograma`: Crea un nuevo hito en la agenda académica.
-*   `DELETE /cronograma/:id`: Remueve un hito de la agenda.
-*   `GET /stats`: Ejecuta consultas de agregación consolidadas en base de datos para mostrar las estadísticas globales.
-*   `GET /reportes`: Obtiene todas las bitácoras del sistema con cruce de nombres y datos de estudiantes para exportar y auditar.
-
----
-
-## 6. Sistema de Diseño Estético y Visual (CSS)
-
-La hoja de estilos principal [`client/src/index.css`](file:///c:/Users/Maria%20Vasquez/Desktop/Control%20Proyectos%20comunitarios/client/src/index.css) define la identidad gráfica premium de la plataforma:
-
-*   **Identidad Institucional (Colores UNEFA)**: Combina un azul marino imperial (`#0C2340`) y un dorado metálico curado (`#C5A059`) junto a una paleta secundaria de escala de grises y estados.
-*   **Tipografía Moderna**: Implementa las fuentes de Google Fonts **Outfit** (con peso extra-negrita de 800 y 900 para títulos jerárquicos) e **Inter** (para textos informativos y cuerpo de lectura cómodo).
-*   **Glassmorphism Premium**: Se definen las clases `.glass-panel` y `.glass-card` con propiedades de translucidez y desenfoque:
-    ```css
-    background: rgba(255, 255, 255, 0.85);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.5);
-    box-shadow: 0 8px 32px 0 rgba(12, 35, 64, 0.1);
-    ```
-*   **Animación de Carga e Indicadores**: Las barras de progreso incluyen una animación por fotogramas (`@keyframes progress-shimmer`) que genera un efecto de destello en movimiento para representar interactividad y fluidez.
-*   **Diseño para Impresión Actas y PDF**: Se configura una regla `@media print` específica para el formateado físico:
-    *   Oculta de forma automática los botones, cabeceras web, cajas de texto y barras laterales.
-    *   Convierte el fondo a blanco y optimiza las fuentes tipográficas para papel.
-    *   Dibuja tablas de datos de alta legibilidad física.
-    *   Integra un bloque de firma manuscrita para avalar la veracidad del documento con los nombres correspondientes.
+*   `GET /estudiante`: (Estudiante) Retorna el listado de bitácoras del alumno y los consolidados acumulados.
+*   `POST /`: (Estudiante) Crea una nueva actividad.
+*   `PUT /:id`: (Estudiante) Edita una actividad cargada.
+*   `PUT /:id/comentario`: (Tutor) Permite evaluar una actividad (`'approved'` / `'correct'`) y añadir el feedback respectivo.
+*   `POST /generar-acta`: (Coordinador) Genera y descarga el PDF del acta final de evaluación del proyecto con el formato institucional correspondiente (Logos e incrustación de firmas).

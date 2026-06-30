@@ -1,103 +1,69 @@
 import express from 'express';
-import * as db from '../db/index.js';
-import { verifyToken, checkRole } from '../middleware/auth.js';
 import PDFDocument from 'pdfkit';
+import pool from '../db/index.js';
+import { verifyToken, checkRole } from '../middleware/auth.js';
 import fs from 'fs';
-import path from 'path';
+import SVGtoPDF from 'svg-to-pdfkit';
 
 const router = express.Router();
 
-// 1. OBTENER BITÁCORAS DEL ESTUDIANTE AUTENTICADO
-// GET /api/reportes/estudiante (Estudiante)
-router.get('/estudiante', verifyToken, checkRole(['student']), async (req, res) => {
+// 1. Obtener bitácoras y resumen del estudiante
+router.get('/estudiante', verifyToken, async (req, res) => {
   const studentId = req.user.id;
-
   try {
-    // Obtener actividades
-    const activitiesResult = await db.query(
-      'SELECT * FROM activities WHERE student_id = $1 ORDER BY activity_date DESC',
+    const activitiesRes = await pool.query(
+      'SELECT * FROM activities WHERE student_id = $1 ORDER BY activity_date DESC, created_at DESC',
       [studentId]
     );
-    const activities = activitiesResult.rows;
+    const activities = activitiesRes.rows;
 
-    // Calcular horas reales mediante consultas de agregación SUM() en PostgreSQL
-    const approvedRes = await db.query(
-      "SELECT COALESCE(SUM(hours_spent), 0) as approved FROM activities WHERE student_id = $1 AND status = 'approved'",
-      [studentId]
-    );
-    const pendingRes = await db.query(
-      "SELECT COALESCE(SUM(hours_spent), 0) as pending FROM activities WHERE student_id = $1 AND status = 'pending'",
-      [studentId]
-    );
-    const correctRes = await db.query(
-      "SELECT COALESCE(SUM(hours_spent), 0) as correct FROM activities WHERE student_id = $1 AND status = 'correct'",
-      [studentId]
-    );
+    let approved = 0;
+    let pending = 0;
+    let correct = 0;
+    activities.forEach(act => {
+      const hours = parseInt(act.hours_spent) || 0;
+      if (act.status === 'approved') approved += hours;
+      else if (act.status === 'pending') pending += hours;
+      else if (act.status === 'correct') correct += hours;
+    });
 
-    const approvedHours = parseInt(approvedRes.rows[0].approved);
-    const pendingHours = parseInt(pendingRes.rows[0].pending);
-    const correctHours = parseInt(correctRes.rows[0].correct);
+    const total = approved + pending + correct;
+    const remaining = Math.max(0, 120 - approved);
+    const percentage = Math.min(100, Math.round((approved / 120) * 100));
 
     res.json({
       activities,
-      summary: {
-        approved: approvedHours,
-        pending: pendingHours,
-        correct: correctHours,
-        total: approvedHours + pendingHours + correctHours,
-        remaining: Math.max(120 - approvedHours, 0),
-        percentage: Math.min(Math.round((approvedHours / 120) * 100), 100)
-      }
+      summary: { approved, pending, correct, total, remaining, percentage }
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// 2. REGISTRAR UNA NUEVA ACTIVIDAD
-// POST /api/reportes (Estudiante)
-router.post('/', verifyToken, checkRole(['student']), async (req, res) => {
+// 2. Registrar nueva actividad
+router.post('/', verifyToken, async (req, res) => {
   const studentId = req.user.id;
-  const {
-    activity_date,
-    hours_spent,
-    description,
-    physical_attendance,
-    spokesperson_name,
-    spokesperson_phone,
-    sworn_statement
-  } = req.body;
+  const { activity_date, hours_spent, description, physical_attendance, spokesperson_name, spokesperson_phone, sworn_statement } = req.body;
 
-  // Validaciones
-  if (!activity_date || !hours_spent || !description || !spokesperson_name || !spokesperson_phone) {
-    return res.status(400).json({ error: 'Todos los campos son obligatorios.' });
+  if (!activity_date || !hours_spent || !description || !spokesperson_name || !spokesperson_phone || sworn_statement === undefined) {
+    return res.status(400).json({ error: 'Todos los campos son obligatorios y debe aceptar la declaración jurada.' });
   }
 
   const hours = parseInt(hours_spent);
   if (isNaN(hours) || hours < 1 || hours > 8) {
-    return res.status(400).json({ error: 'Las horas invertidas deben ser entre 1 y 8 horas por día.' });
+    return res.status(400).json({ error: 'Las horas invertidas deben estar entre 1 y 8 horas por día.' });
   }
 
   if (!sworn_statement) {
-    return res.status(400).json({ error: 'Debe aceptar la declaración jurada para registrar la actividad.' });
+    return res.status(400).json({ error: 'Debe aceptar la declaración jurada.' });
   }
 
   try {
-    const result = await db.query(
-      `INSERT INTO activities 
-      (student_id, activity_date, hours_spent, description, physical_attendance, spokesperson_name, spokesperson_phone, sworn_statement, status) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending') 
-      RETURNING *`,
-      [
-        studentId,
-        activity_date,
-        hours,
-        description,
-        !!physical_attendance,
-        spokesperson_name,
-        spokesperson_phone,
-        !!sworn_statement
-      ]
+    const result = await pool.query(
+      `INSERT INTO activities (student_id, activity_date, hours_spent, description, physical_attendance, spokesperson_name, spokesperson_phone, sworn_statement, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')
+       RETURNING *`,
+      [studentId, activity_date, hours, description, !!physical_attendance, spokesperson_name, spokesperson_phone, true]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -105,103 +71,62 @@ router.post('/', verifyToken, checkRole(['student']), async (req, res) => {
   }
 });
 
-// 3. EDITAR Y REENVIAR ACTIVIDAD (Estudiante - Solo si estaba en estado 'correct')
-// PUT /api/reportes/:id (Estudiante)
-router.put('/:id', verifyToken, checkRole(['student']), async (req, res) => {
-  const { id } = req.params;
+// 3. Corregir/editar actividad por el estudiante
+router.put('/:id', verifyToken, async (req, res) => {
   const studentId = req.user.id;
-  const {
-    activity_date,
-    hours_spent,
-    description,
-    physical_attendance,
-    spokesperson_name,
-    spokesperson_phone
-  } = req.body;
+  const { id } = req.params;
+  const { activity_date, hours_spent, description, physical_attendance, spokesperson_name, spokesperson_phone, sworn_statement } = req.body;
 
-  if (!activity_date || !hours_spent || !description || !spokesperson_name || !spokesperson_phone) {
+  if (!activity_date || !hours_spent || !description || !spokesperson_name || !spokesperson_phone || sworn_statement === undefined) {
     return res.status(400).json({ error: 'Todos los campos son obligatorios.' });
   }
 
   const hours = parseInt(hours_spent);
   if (isNaN(hours) || hours < 1 || hours > 8) {
-    return res.status(400).json({ error: 'Las horas invertidas deben ser de 1 a 8 horas.' });
+    return res.status(400).json({ error: 'Las horas invertidas deben estar entre 1 y 8 horas por día.' });
   }
 
   try {
-    // Verificar propiedad
-    const checkResult = await db.query('SELECT * FROM activities WHERE id = $1 AND student_id = $2', [parseInt(id), studentId]);
-    if (checkResult.rowCount === 0) {
-      return res.status(404).json({ error: 'Bitácora no encontrada o no pertenece al estudiante.' });
+    const checkRes = await pool.query('SELECT student_id FROM activities WHERE id = $1', [id]);
+    if (checkRes.rowCount === 0) {
+      return res.status(404).json({ error: 'Actividad no encontrada.' });
+    }
+    if (checkRes.rows[0].student_id !== studentId) {
+      return res.status(403).json({ error: 'No autorizado para modificar esta actividad.' });
     }
 
-    const result = await db.query(
-      `UPDATE activities SET 
-        activity_date = $1, 
-        hours_spent = $2, 
-        description = $3, 
-        physical_attendance = $4, 
-        spokesperson_name = $5, 
-        spokesperson_phone = $6,
-        status = 'pending',
-        feedback_comment = NULL,
-        updated_at = CURRENT_TIMESTAMP
-      WHERE id = $7 AND student_id = $8 
-      RETURNING *`,
-      [
-        activity_date,
-        hours,
-        description,
-        !!physical_attendance,
-        spokesperson_name,
-        spokesperson_phone,
-        parseInt(id),
-        studentId
-      ]
+    const result = await pool.query(
+      `UPDATE activities 
+       SET activity_date = $1, hours_spent = $2, description = $3, physical_attendance = $4, spokesperson_name = $5, spokesperson_phone = $6, sworn_statement = $7, status = 'pending', updated_at = CURRENT_TIMESTAMP
+       WHERE id = $8 RETURNING *`,
+      [activity_date, hours, description, !!physical_attendance, spokesperson_name, spokesperson_phone, !!sworn_statement, id]
     );
-
     res.json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// 4. EVALUAR REPORTES CON COMENTARIOS (Tutor)
-// PUT /api/reportes/:id/comentario (Tutor)
+// 4. Evaluar actividad por el tutor (Aprobar o Requerir Corrección)
 router.put('/:id/comentario', verifyToken, checkRole(['tutor']), async (req, res) => {
   const { id } = req.params;
-  const { status, feedback_comment } = req.body; // status: 'approved' o 'correct'
+  const { status, feedback_comment } = req.body;
 
   if (!status || !['approved', 'correct'].includes(status)) {
-    return res.status(400).json({ error: "Estado inválido. Debe ser 'approved' o 'correct'." });
-  }
-
-  if (status === 'correct' && (!feedback_comment || feedback_comment.trim() === '')) {
-    return res.status(400).json({ error: 'Debe ingresar una observación o comentario para la corrección.' });
+    return res.status(400).json({ error: 'El estado enviado es inválido. Debe ser approved o correct.' });
   }
 
   try {
-    // Verificar si el estudiante de esta actividad está asignado a este tutor
-    const checkResult = await db.query(
-      `SELECT a.id FROM activities a 
-       JOIN users u ON a.student_id = u.id 
-       WHERE a.id = $1 AND u.tutor_id = $2`,
-      [parseInt(id), req.user.id]
+    const result = await pool.query(
+      `UPDATE activities 
+       SET status = $1, feedback_comment = $2, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $3 RETURNING *`,
+      [status, feedback_comment, id]
     );
 
-    if (checkResult.rowCount === 0) {
-      return res.status(403).json({ error: 'No está autorizado para evaluar reportes de este estudiante.' });
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Actividad no encontrada.' });
     }
-
-    const result = await db.query(
-      `UPDATE activities SET 
-        status = $1, 
-        feedback_comment = $2, 
-        updated_at = CURRENT_TIMESTAMP
-      WHERE id = $3 
-      RETURNING *`,
-      [status, feedback_comment || null, parseInt(id)]
-    );
 
     res.json(result.rows[0]);
   } catch (err) {
@@ -209,206 +134,273 @@ router.put('/:id/comentario', verifyToken, checkRole(['tutor']), async (req, res
   }
 });
 
-// 5. GENERAR ACTA DE EVALUACIÓN FINAL EN PDF
-// GET /api/reportes/acta/:studentId (Disponible para todos los usuarios autenticados con restricciones de rol)
-router.get('/acta/:studentId', verifyToken, async (req, res) => {
-  const { studentId } = req.params;
-
-  // Si es estudiante, solo puede descargar su propia acta
-  if (req.user.role === 'student' && req.user.id !== parseInt(studentId)) {
-    return res.status(403).json({ error: 'No está autorizado para ver esta acta.' });
-  }
+// 5. Generar Acta de Evaluación Final en PDF con Formato Institucional Completo
+router.post('/generar-acta', async (req, res) => {
+  const { project_id, acta_type, semestre, seccion, fecha_inicio, fecha_culminacion, periodo, autoridades } = req.body;
 
   try {
-    // 1. Obtener la información del estudiante, su proyecto y su tutor asignado
-    const studentRes = await db.query(
-      `SELECT u.name, u.identification, u.major, u.docs_submitted,
-              cp.title as project_title, cp.community_name as project_community,
-              t.name as tutor_name
-       FROM users u
-       LEFT JOIN current_projects cp ON u.project_id = cp.id
-       LEFT JOIN users t ON u.tutor_id = t.id
-       WHERE u.id = $1 AND u.role = 'student'`,
-      [parseInt(studentId)]
-    );
+    // Consulta SQL: Busca a los estudiantes del proyecto, sus horas aprobadas y su tutor asignado
+    const query = `
+      SELECT u.id, u.identification, u.name, u.major, cp.title AS titulo,
+      t.name AS tutor_name, t.identification AS tutor_identification,
+      COALESCE(SUM(a.hours_spent), 0) as total_horas
+      FROM users u
+      LEFT JOIN current_projects cp ON u.project_id = cp.id
+      LEFT JOIN users t ON u.tutor_id = t.id
+      LEFT JOIN activities a ON u.id = a.student_id AND a.status = 'approved'
+      WHERE u.project_id = $1
+      GROUP BY u.id, cp.id, cp.title, t.name, t.identification
+    `;
+    
+    const { rows } = await pool.query(query, [project_id]);
 
-    if (studentRes.rowCount === 0) {
-      return res.status(404).json({ error: 'Estudiante no encontrado o el usuario no es un estudiante.' });
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "No se encontraron estudiantes para este proyecto." });
     }
 
-    const student = studentRes.rows[0];
+    // Configuración del Documento (Vertical vs Horizontal)
+    const isHorizontal = acta_type === 3;
+    const doc = new PDFDocument({ 
+      layout: isHorizontal ? 'landscape' : 'portrait', 
+      margin: 50 
+    });
 
-    // 2. Obtener horas acumuladas aprobadas
-    const hoursRes = await db.query(
-      `SELECT COALESCE(SUM(hours_spent), 0) as approved 
-       FROM activities 
-       WHERE student_id = $1 AND status = 'approved'`,
-      [parseInt(studentId)]
-    );
-    const approvedHours = parseInt(hoursRes.rows[0].approved);
-
-    // 3. Crear el documento PDF
-    const doc = new PDFDocument({ margin: 50, size: 'LETTER' });
-
-    // Configurar cabeceras HTTP para descarga del archivo
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=Acta_Servicio_Comunitario_${student.identification}.pdf`);
+    res.setHeader('Content-Disposition', 'attachment; filename=Acta_Evaluacion.pdf');
+    
     doc.pipe(res);
 
-    // Logo del Ministerio de la Defensa (esquina superior izquierda) y Logo de la UNEFA (esquina superior derecha)
-    const minLogoPath = path.resolve('..', 'client', 'src', 'assets', 'logo_ministerio.png');
-    const unefaLogoPath = path.resolve('..', 'client', 'src', 'assets', 'logo_unefa.png');
-
-    let minLogoExists = false;
-    let unefaLogoExists = false;
-    try {
-      minLogoExists = fs.existsSync(minLogoPath);
-      unefaLogoExists = fs.existsSync(unefaLogoPath);
-    } catch (e) {
-      // Ignorar error
-    }
-
-    // Dibujar logo izquierda (Ministerio)
-    if (minLogoExists) {
-      doc.image(minLogoPath, 50, 30, { width: 55 });
-    } else {
-      // Caja estética con colores unefa/navy en caso de no existir archivo físico
-      doc.rect(50, 30, 55, 55).fill('#0C2340');
-      doc.fillColor('white').fontSize(6).text('MINISTERIO\nDEFENSA', 52, 45, { width: 51, align: 'center' });
-    }
-
-    // Dibujar logo derecha (UNEFA)
-    if (unefaLogoExists) {
-      doc.image(unefaLogoPath, 505, 30, { width: 55 });
-    } else {
-      // Caja estética dorada
-      doc.rect(505, 30, 55, 55).fill('#C5A059');
-      doc.fillColor('#0C2340').fontSize(7).text('UNEFA', 507, 50, { width: 51, align: 'center' });
-    }
-
-    // Cabecera Centrada Oficial
-    doc.fillColor('#0C2340')
-       .fontSize(9)
-       .font('Helvetica-Bold')
-       .text('REPÚBLICA BOLIVARIANA DE VENEZUELA', 120, 35, { align: 'center', width: 370 })
-       .text('MINISTERIO DEL PODER POPULAR PARA LA DEFENSA', 120, 48, { align: 'center', width: 370 })
-       .text('UNIVERSIDAD NACIONAL EXPERIMENTAL POLITÉCNICA', 120, 61, { align: 'center', width: 370 })
-       .text('DE LA FUERZA ARMADA NACIONAL BOLIVARIANA (UNEFA)', 120, 74, { align: 'center', width: 370 })
-       .fontSize(7)
-       .font('Helvetica-Oblique')
-       .text('VICERRECTORADO DE ASUNTOS SOCIALES Y PARTICIPACIÓN CIUDADANA', 120, 88, { align: 'center', width: 370 });
-
-    doc.moveDown(3.5);
-
-    // Título del Acta
-    doc.fillColor('#0C2340')
-       .fontSize(14)
-       .font('Helvetica-Bold')
-       .text('ACTA DE EVALUACIÓN FINAL DE SERVICIO COMUNITARIO', { align: 'center' });
-
-    doc.moveDown(1.5);
-
-    // Cuerpo
-    doc.fillColor('#1E293B')
-       .fontSize(10)
-       .font('Helvetica')
-       .text('Quien suscribe, Prof. Rosa Camejo, en su carácter de Coordinador de Servicio Comunitario del Núcleo Académico, hace constar que el (la) ciudadano(a):', { align: 'justify', lineGap: 3 });
-
-    doc.moveDown(0.8);
-
-    // Caja de datos del estudiante (Representación estética con bordes y relleno)
-    const studentY = doc.y;
-    doc.rect(50, studentY, 512, 70).fillAndStroke('#F8FAFC', '#E2E8F0');
+    // Dibujar Cabecera con Representación de Logotipos Institucionales
+    const logoRightX = isHorizontal ? 662 : 482;
     
-    doc.fillColor('#0C2340')
-       .fontSize(10)
-       .font('Helvetica-Bold')
-       .text('ESTUDIANTE:', 65, studentY + 10)
-       .font('Helvetica')
-       .text(student.name.toUpperCase(), 160, studentY + 10)
-       
-       .font('Helvetica-Bold')
-       .text('CÉDULA DE ID:', 65, studentY + 24)
-       .font('Helvetica')
-       .text(student.identification, 160, studentY + 24)
+    const pathLogoMinisterio = './assets/logo_ministerio.jpg';
+    const pathLogoUnefaSvg = './assets/logo_unefa.svg';
+    const pathLogoUnefaPng = './assets/logo_unefa.png';
+    const pathLogoUnefaJpg = './assets/logo_unefa.jpg';
+    
+    // Logotipo del Ministerio (Izquierda)
+    try {
+      doc.image(pathLogoMinisterio, 50, 40, { width: 80, height: 40 });
+    } catch (e) {
+      doc.lineWidth(1).strokeColor('#0C2340');
+      doc.rect(50, 40, 80, 40).stroke();
+      doc.fontSize(6).font('Helvetica-Bold').fillColor('#0C2340');
+      doc.text('MPP DEFENSA', 50, 50, { width: 80, align: 'center' });
+      doc.fontSize(5).font('Helvetica').fillColor('#000000');
+      doc.text('LOGO NO ENCONTRADO', 50, 64, { width: 80, align: 'center' });
+    }
+    
+    // Logotipo de la UNEFA (Derecha) - Intentar SVG, PNG, luego JPG
+    try {
+      if (fs.existsSync(pathLogoUnefaSvg)) {
+        const svgContent = fs.readFileSync(pathLogoUnefaSvg, 'utf8');
+        const cleanSvg = svgContent
+          .replace(/width\s*=\s*"[^"]*"/i, '')
+          .replace(/height\s*=\s*"[^"]*"/i, '');
+        SVGtoPDF(doc, cleanSvg, logoRightX, 40, { width: 80, height: 40, preserveAspectRatio: 'xMidYMid meet' });
+      } else {
+        throw new Error('Archivo SVG no encontrado');
+      }
+    } catch (e) {
+      try {
+        doc.image(pathLogoUnefaPng, logoRightX, 40, { width: 80, height: 40 });
+      } catch (errPng) {
+        try {
+          doc.image(pathLogoUnefaJpg, logoRightX, 40, { width: 80, height: 40 });
+        } catch (errJpg) {
+          doc.lineWidth(1).strokeColor('#0C2340');
+          doc.rect(logoRightX, 40, 80, 40).stroke();
+          doc.fontSize(7).font('Helvetica-Bold').fillColor('#0C2340');
+          doc.text('UNEFA', logoRightX, 50, { width: 80, align: 'center' });
+          doc.fontSize(5).font('Helvetica').fillColor('#000000');
+          doc.text('LOGO NO ENCONTRADO', logoRightX, 64, { width: 80, align: 'center' });
+        }
+      }
+    }
 
-       .font('Helvetica-Bold')
-       .text('CARRERA:', 65, studentY + 38)
-       .font('Helvetica')
-       .text(student.major, 160, studentY + 38)
+    // Textos institucionales centrados (especificando coordenadas y ancho para evitar heredar alineaciones anteriores)
+    const titleWidth = isHorizontal ? 692 : 512;
+    doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
+    doc.text('REPÚBLICA BOLIVARIANA DE VENEZUELA', 50, 100, { width: titleWidth, align: 'center' });
+    doc.text('MINISTERIO DEL PODER POPULAR PARA LA DEFENSA', 50, doc.y, { width: titleWidth, align: 'center' });
+    doc.text('UNIVERSIDAD NACIONAL EXPERIMENTAL POLITÉCNICA DE LA FUERZA ARMADA BOLIVARIANA', 50, doc.y, { width: titleWidth, align: 'center' });
+    doc.text('NÚCLEO GUÁRICO - EXTENSIÓN EL SOCORRO', 50, doc.y, { width: titleWidth, align: 'center' });
+    doc.moveDown(2);
 
-       .font('Helvetica-Bold')
-       .text('TUTOR ACADÉMICO:', 65, studentY + 52)
-       .font('Helvetica')
-       .text(student.tutor_name || 'No Asignado', 160, studentY + 52);
+    // Dibujar Metadatos según el Formato Seleccionado (especificando coordenadas)
+    doc.fontSize(10).font('Helvetica');
+    
+    if (acta_type === 1 || acta_type === 2) {
+      doc.font('Helvetica-Bold').text('ACTA DE EVALUACIÓN FINAL DEL SERVICIO COMUNITARIO', 50, doc.y, { width: titleWidth, align: 'center' });
+      doc.moveDown();
+      doc.font('Helvetica').text(`PROGRAMA: SERVICIO COMUNITARIO`, 50, doc.y);
+      doc.text(`CARRERA: ${rows[0].major}    SEMESTRE: ${semestre}    SECCIÓN: ${seccion}`, 50, doc.y);
+      doc.text(`FECHA DE INICIO: ${fecha_inicio}    FECHA DE CULMINACIÓN: ${fecha_culminacion}`, 50, doc.y);
+      
+      if (acta_type === 1) {
+        doc.moveDown();
+        doc.font('Helvetica-Bold').text(`TÍTULO: ${rows[0].titulo}`, 50, doc.y);
+      }
+    } else if (acta_type === 3) {
+      doc.font('Helvetica-Bold').text(`ACTA DE EVALUACIÓN FINAL SERVICIO COMUNITARIO PERIODO ${periodo}`, 50, doc.y, { width: titleWidth, align: 'center' });
+    }
+    
+    doc.moveDown(2);
+    doc.moveDown(2);
 
-    doc.moveDown(5.8);
+    // Dibujar Tabla de Estudiantes
+    let startY = doc.y;
+    
+    doc.font('Helvetica-Bold');
+    if (!isHorizontal) {
+      doc.text('N°', 50, startY);
+      doc.text('CÉDULA', 80, startY);
+      doc.text('APELLIDOS', 170, startY);
+      doc.text('NOMBRES', 290, startY);
+      doc.text('CARRERA', 410, startY);
+      doc.text('NOTA FINAL', 490, startY);
+      doc.moveTo(50, startY + 15).lineTo(562, startY + 15).stroke();
+    } else {
+      doc.text('N°', 50, startY);
+      doc.text('CÉDULA', 90, startY);
+      doc.text('APELLIDOS', 200, startY);
+      doc.text('NOMBRES', 350, startY);
+      doc.text('CARRERA', 500, startY);
+      doc.text('NOTA FINAL', 630, startY);
+      doc.moveTo(50, startY + 15).lineTo(742, startY + 15).stroke();
+    }
+    
+    let currentY = startY + 25;
+    doc.font('Helvetica');
 
-    doc.fillColor('#1E293B')
-       .fontSize(10)
-       .font('Helvetica')
-       .text('Ha cumplido de forma satisfactoria con la planificación y ejecución de las actividades correspondientes a su proyecto comunitario titulado:', { align: 'justify', lineGap: 3 });
+    rows.forEach((student, index) => {
+      const notaFinal = student.total_horas >= 120 ? 'APROBADO' : 'REPROBADO';
+      
+      // Separación inteligente de Nombre completo a Apellidos y Nombres
+      const nameParts = student.name.split(',');
+      let apellidos = '';
+      let nombres = '';
 
-    doc.moveDown(0.8);
+      if (nameParts.length > 1) {
+        apellidos = nameParts[0].trim();
+        nombres = nameParts.slice(1).join(',').trim();
+      } else {
+        const parts = student.name.trim().split(/\s+/);
+        if (parts.length >= 4) {
+          nombres = parts.slice(0, 2).join(' ');
+          apellidos = parts.slice(2).join(' ');
+        } else if (parts.length === 3) {
+          nombres = parts[0];
+          apellidos = parts.slice(1).join(' ');
+        } else if (parts.length === 2) {
+          nombres = parts[0];
+          apellidos = parts[1];
+        } else {
+          nombres = student.name;
+          apellidos = '';
+        }
+      }
 
-    // Caja de proyecto actual
-    const projectY = doc.y;
-    doc.rect(50, projectY, 512, 55).fillAndStroke('#F8FAFC', '#C5A059');
+      if (!isHorizontal) {
+        doc.text(`${index + 1}`, 50, currentY);
+        doc.text(`${student.identification}`, 80, currentY);
+        doc.text(`${apellidos}`, 170, currentY, { width: 110, height: 15, ellipsis: true });
+        doc.text(`${nombres}`, 290, currentY, { width: 110, height: 15, ellipsis: true });
+        doc.text(`${student.major}`, 410, currentY, { width: 75, height: 15, ellipsis: true });
+        doc.text(`${notaFinal}`, 490, currentY);
+      } else {
+        doc.text(`${index + 1}`, 50, currentY);
+        doc.text(`${student.identification}`, 90, currentY);
+        doc.text(`${apellidos}`, 200, currentY, { width: 140, height: 15, ellipsis: true });
+        doc.text(`${nombres}`, 350, currentY, { width: 140, height: 15, ellipsis: true });
+        doc.text(`${student.major}`, 500, currentY, { width: 120, height: 15, ellipsis: true });
+        doc.text(`${notaFinal}`, 630, currentY);
+      }
+      
+      currentY += 20;
+    });
 
-    doc.fillColor('#0C2340')
-       .fontSize(9)
-       .font('Helvetica-Bold')
-       .text('PROYECTO:', 65, projectY + 10)
-       .font('Helvetica')
-       .text(student.project_title || 'N/A', 140, projectY + 10, { width: 400 })
-       
-       .font('Helvetica-Bold')
-       .text('COMUNIDAD:', 65, projectY + 32)
-       .font('Helvetica')
-       .text(student.project_community || 'N/A', 140, projectY + 32, { width: 400 });
+    // Dibujar Firmas Autorizadas de las Tres Autoridades
+    doc.moveDown(5);
+    currentY = doc.y;
+    
+    // Evitar que las firmas queden solas si se desborda la página
+    const bottomLimit = isHorizontal ? 480 : 650;
+    if (currentY > bottomLimit) {
+      doc.addPage();
+      currentY = 100;
+    }
+    
+    if (!isHorizontal) {
+      // Líneas de firma (Vertical)
+      doc.lineWidth(1).strokeColor('#475569');
+      doc.moveTo(50, currentY).lineTo(190, currentY).stroke();
+      doc.moveTo(236, currentY).lineTo(376, currentY).stroke();
+      doc.moveTo(422, currentY).lineTo(562, currentY).stroke();
+      
+      // Nombres y Cargos
+      doc.fontSize(7).font('Helvetica-Bold').fillColor('#0F172A');
+      
+      // 1. Tutor Académico
+      const tutorName = rows[0].tutor_name || 'TUTOR ACADÉMICO';
+      const tutorCi = rows[0].tutor_identification ? `C.I. ${rows[0].tutor_identification}` : '';
+      doc.text(tutorName, 50, currentY + 5, { width: 140, align: 'center' });
+      doc.fontSize(6).font('Helvetica').fillColor('#64748B');
+      if (tutorCi) {
+        doc.text(tutorCi, 50, currentY + 15, { width: 140, align: 'center' });
+        doc.text('TUTOR ACADÉMICO', 50, currentY + 25, { width: 140, align: 'center' });
+      } else {
+        doc.text('TUTOR ACADÉMICO', 50, currentY + 15, { width: 140, align: 'center' });
+      }
 
-    doc.moveDown(4.5);
+      // 2. Jefe de Área Académica
+      doc.fontSize(7).font('Helvetica-Bold').fillColor('#0F172A');
+      doc.text(autoridades.jefe_area || 'JEFE DE ÁREA ACADÉMICA', 236, currentY + 5, { width: 140, align: 'center' });
+      doc.fontSize(6).font('Helvetica').fillColor('#64748B');
+      const jefeAreaCi = autoridades.jefe_area_ci ? `C.I. ${autoridades.jefe_area_ci}` : '';
+      if (jefeAreaCi) {
+        doc.text(jefeAreaCi, 236, currentY + 15, { width: 140, align: 'center' });
+        doc.text('JEFE DE ÁREA ACADÉMICA', 236, currentY + 25, { width: 140, align: 'center' });
+      } else {
+        doc.text('JEFE DE ÁREA ACADÉMICA', 236, currentY + 15, { width: 140, align: 'center' });
+      }
 
-    doc.fillColor('#1E293B')
-       .fontSize(10)
-       .font('Helvetica')
-       .text('Acumulando un total de ', { align: 'justify', continued: true })
-       .font('Helvetica-Bold')
-       .text(`${approvedHours} horas`, { continued: true })
-       .font('Helvetica')
-       .text(' de trabajo comunitario aprobadas y validadas según las normativas y reglamentos vigentes del Servicio Comunitario de la UNEFA.', { lineGap: 3 });
+      // 3. Responsable de Servicio Comunitario
+      doc.fontSize(7).font('Helvetica-Bold').fillColor('#0F172A');
+      doc.text(autoridades.responsable_servicio || 'RESPONSABLE SERVICIO COMUNITARIO', 422, currentY + 5, { width: 140, align: 'center' });
+      doc.fontSize(6).font('Helvetica').fillColor('#64748B');
+      const respCi = autoridades.responsable_servicio_ci ? `C.I. ${autoridades.responsable_servicio_ci}` : '';
+      if (respCi) {
+        doc.text(respCi, 422, currentY + 15, { width: 140, align: 'center' });
+        doc.text('RESPONSABLE SERVICIO COMUNITARIO', 422, currentY + 25, { width: 140, align: 'center' });
+      } else {
+        doc.text('RESPONSABLE SERVICIO COMUNITARIO', 422, currentY + 15, { width: 140, align: 'center' });
+      }
+    } else {
+      // Línea de firma única centrada (Horizontal)
+      const lineWidth = 220;
+      const lineX = (792 - lineWidth) / 2; // Centrado en página horizontal de 792 pt
+      doc.lineWidth(1).strokeColor('#475569');
+      doc.moveTo(lineX, currentY).lineTo(lineX + lineWidth, currentY).stroke();
+      
+      // Nombre y Cargo
+      doc.fontSize(7).font('Helvetica-Bold').fillColor('#0F172A');
+      doc.text(autoridades.responsable_servicio || 'RESPONSABLE DE PROYECTO COMUNITARIO', lineX, currentY + 5, { width: lineWidth, align: 'center' });
+      doc.fontSize(6).font('Helvetica').fillColor('#64748B');
+      const respCi = autoridades.responsable_servicio_ci ? `C.I. ${autoridades.responsable_servicio_ci}` : '';
+      if (respCi) {
+        doc.text(respCi, lineX, currentY + 15, { width: lineWidth, align: 'center' });
+        doc.text('RESPONSABLE DE PROYECTO COMUNITARIO', lineX, currentY + 25, { width: lineWidth, align: 'center' });
+      } else {
+        doc.text('RESPONSABLE DE PROYECTO COMUNITARIO', lineX, currentY + 15, { width: lineWidth, align: 'center' });
+      }
+    }
 
-    doc.moveDown(0.8);
-
-    const docStatusStr = student.docs_submitted ? 'CONSIGNADA Y APROBADA' : 'PENDIENTE DE ENTREGA';
-    doc.text('Asimismo, se deja constancia de que la documentación final requerida para este proceso se encuentra: ', { align: 'justify', continued: true })
-       .font('Helvetica-Bold')
-       .text(`${docStatusStr}.`);
-
-    doc.moveDown(3);
-
-    // Firmas estáticas
-    const sigY = doc.y + 20;
-    doc.moveTo(80, sigY).lineTo(220, sigY).stroke('#94A3B8');
-    doc.moveTo(390, sigY).lineTo(530, sigY).stroke('#94A3B8');
-
-    doc.fillColor('#0C2340')
-       .fontSize(9)
-       .font('Helvetica-Bold')
-       .text('Prof. Rosa Camejo', 80, sigY + 6, { align: 'center', width: 140 })
-       .font('Helvetica')
-       .text('Coordinador General de Servicio Comunitario', 80, sigY + 18, { align: 'center', width: 140 });
-
-    doc.font('Helvetica-Bold')
-       .text('Firma del Decano / Sello', 390, sigY + 6, { align: 'center', width: 140 })
-       .font('Helvetica')
-       .text('Núcleo de Asuntos Académicos', 390, sigY + 18, { align: 'center', width: 140 });
-
-    // Finalizar e imprimir
     doc.end();
 
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  } catch (error) {
+    console.error("Error generando el acta:", error);
+    res.status(500).json({ error: 'Error interno del servidor al generar el PDF' });
   }
 });
 

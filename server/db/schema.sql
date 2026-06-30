@@ -7,6 +7,7 @@ DROP TABLE IF EXISTS milestones CASCADE;
 DROP TABLE IF EXISTS historical_projects CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
 DROP TABLE IF EXISTS current_projects CASCADE;
+DROP TYPE IF EXISTS tutor_enum CASCADE;
 
 -- 0. Tabla de Proyectos Actuales (Comunitarios activos)
 CREATE TABLE current_projects (
@@ -14,6 +15,9 @@ CREATE TABLE current_projects (
     title VARCHAR(255) NOT NULL,
     community_name VARCHAR(255) NOT NULL
 );
+
+-- 0.5. Tipo ENUM para tipo de tutor
+CREATE TYPE tutor_enum AS ENUM ('académico', 'institucional');
 
 -- 1. Tabla de Usuarios (Estudiantes, Tutores y Coordinadores)
 CREATE TABLE users (
@@ -27,7 +31,7 @@ CREATE TABLE users (
     tutor_id INTEGER REFERENCES users(id) ON DELETE SET NULL, -- Tutor asignado al estudiante
     project_id INTEGER REFERENCES current_projects(id) ON DELETE SET NULL, -- Proyecto actual asignado
     docs_submitted BOOLEAN DEFAULT FALSE,       -- Control de entrega de documentos
-    tutor_type VARCHAR(50) CHECK (tutor_type IN ('académico', 'institucional')), -- Tipo de tutor
+    tutor_type tutor_enum,                      -- Tipo de tutor
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
