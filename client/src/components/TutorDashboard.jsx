@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import ProjectSchedule from './ProjectSchedule';
 import ProjectHistory from './ProjectHistory';
 
-const API_BASE = 'http://localhost:5000/api';
+const API_BASE = 'https://api-control-sc-unefa.onrender.com/api';
 
 export default function TutorDashboard({ user, token }) {
   const [projects, setProjects] = useState([]);

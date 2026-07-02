@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-const API_BASE = 'http://localhost:5000/api';
+const API_BASE = 'https://api-control-sc-unefa.onrender.com/api';
 const BACKEND_URL = API_BASE.replace('/api', '');
 
 export default function ProjectHistory({ projectId, token, readOnly = false }) {

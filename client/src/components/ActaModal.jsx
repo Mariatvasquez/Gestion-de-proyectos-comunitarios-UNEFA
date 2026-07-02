@@ -37,7 +37,7 @@ const ActaModal = ({ projectId, formato, onClose }) => {
     e.preventDefault();
     
     try {
-      const response = await fetch('http://localhost:5000/api/reportes/generar-acta', {
+      const response = await fetch('https://api-control-sc-unefa.onrender.com/api/reportes/generar-acta', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

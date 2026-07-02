@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ProjectSchedule from './ProjectSchedule';
 
-const API_BASE = 'http://localhost:5000/api';
+const API_BASE = 'https://api-control-sc-unefa.onrender.com/api';
 const BACKEND_URL = API_BASE.replace('/api', '');
 
 export default function StudentDashboard({ user, token }) {
