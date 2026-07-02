@@ -5,7 +5,7 @@ import StudentDashboard from './components/StudentDashboard';
 import TutorDashboard from './components/TutorDashboard';
 import CoordinatorDashboard from './components/CoordinatorDashboard';
 
-const API_BASE = 'http://localhost:5000/api';
+const API_BASE = 'https://api-control-sc-unefa.onrender.com';
 
 export default function App() {
   const [activeUser, setActiveUser] = useState(null);
