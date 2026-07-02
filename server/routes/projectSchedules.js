@@ -1,6 +1,9 @@
 import express from 'express';
+import fs from 'fs';
+import path from 'path';
 import * as db from '../db/index.js';
 import { verifyToken } from '../middleware/auth.js';
+import upload from '../middleware/upload.js';
 
 const router = express.Router();
 
@@ -161,6 +164,83 @@ router.delete('/:project_id/cronograma/:id', verifyToken, async (req, res) => {
     }
     
     res.json({ message: 'Registro de cronograma eliminado correctamente.', deleted: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 5. POST /api/proyectos/:id/documentos
+// Recibe el PDF subido mediante multipart/form-data, lo guarda y registra en la BD
+router.post('/:id/documentos', verifyToken, (req, res, next) => {
+  upload.single('archivo')(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ error: err.message });
+    }
+    next();
+  });
+}, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Debe proporcionar un archivo PDF válido en el campo "archivo".' });
+    }
+
+    // Verificar si el proyecto existe
+    const projCheck = await db.query('SELECT id FROM current_projects WHERE id = $1', [id]);
+    if (projCheck.rowCount === 0) {
+      // Eliminar el archivo físico si el proyecto no existe
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (err) {
+        console.error('Error al eliminar archivo huérfano:', err);
+      }
+      return res.status(404).json({ error: 'Proyecto no encontrado.' });
+    }
+
+    // Registrar el archivo en la base de datos
+    const relativePath = `uploads/historico/${req.file.filename}`;
+    const result = await db.query(
+      `INSERT INTO documentos_historico (proyecto_id, nombre_archivo, ruta_archivo)
+       VALUES ($1, $2, $3)
+       RETURNING *`,
+      [id, req.file.originalname, relativePath]
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    // Limpiar archivo subido si falla el registro en la BD
+    if (req.file && fs.existsSync(req.file.path)) {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (unlinkErr) {
+        console.error('Error al limpiar archivo tras fallo:', unlinkErr);
+      }
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 6. GET /api/proyectos/:id/documentos
+// Devuelve la lista de documentos asociados a ese proyecto ordenados por fecha descendente
+router.get('/:id/documentos', verifyToken, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // Verificar si el proyecto existe
+    const projCheck = await db.query('SELECT id FROM current_projects WHERE id = $1', [id]);
+    if (projCheck.rowCount === 0) {
+      return res.status(404).json({ error: 'Proyecto no encontrado.' });
+    }
+
+    const result = await db.query(
+      `SELECT * FROM documentos_historico
+       WHERE proyecto_id = $1
+       ORDER BY fecha_subida DESC`,
+      [id]
+    );
+
+    res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import ProjectSchedule from './ProjectSchedule';
+import ProjectHistory from './ProjectHistory';
 
 const API_BASE = 'http://localhost:5000/api';
 
@@ -11,6 +13,7 @@ export default function TutorDashboard({ user, token }) {
   const [actionSuccess, setActionSuccess] = useState('');
   const [actionError, setActionError] = useState('');
   const [expandedProjects, setExpandedProjects] = useState({});
+  const [selectedTutorProject, setSelectedTutorProject] = useState('');
 
   const toggleProject = (projectId) => {
     setExpandedProjects(prev => ({
@@ -227,6 +230,11 @@ export default function TutorDashboard({ user, token }) {
                             </div>
                           ))
                         )}
+                        
+                        {/* Historial de Documentos del Proyecto */}
+                        <div style={{ marginTop: '0.8rem', borderTop: '1px solid #E2E8F0', paddingTop: '1rem' }}>
+                          <ProjectHistory projectId={pid} token={token} readOnly={true} />
+                        </div>
                       </div>
                     )}
                   </div>
@@ -395,6 +403,39 @@ export default function TutorDashboard({ user, token }) {
           )}
         </div>
 
+      </div>
+
+      {/* Vista de Cronograma del Proyecto */}
+      <div className="glass-panel" style={{ padding: '1.8rem', display: 'flex', flexDirection: 'column', gap: '1.2rem', marginTop: '0.5rem' }}>
+        <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <i className="fa-solid fa-calendar-days" style={{ color: 'var(--unefa-gold)' }}></i>
+          Cronograma de Actividades
+        </h3>
+
+        <div style={{ maxWidth: '500px', background: 'rgba(12, 35, 64, 0.02)', padding: '1.5rem', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label" style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--unefa-navy)' }}>
+              Seleccione el Proyecto Comunitario
+            </label>
+            <select 
+              className="form-control"
+              value={selectedTutorProject}
+              onChange={(e) => setSelectedTutorProject(e.target.value)}
+              style={{ padding: '0.6rem 0.8rem', fontSize: '0.9rem', cursor: 'pointer', marginTop: '0.5rem' }}
+            >
+              <option value="">-- Elija un proyecto asignado --</option>
+              {projects.map(p => (
+                <option key={p.id || 0} value={p.id}>{p.title} ({p.community_name})</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {selectedTutorProject && (
+          <div style={{ marginTop: '1rem' }}>
+            <ProjectSchedule projectId={selectedTutorProject} token={token} readOnly={true} />
+          </div>
+        )}
       </div>
 
     </div>

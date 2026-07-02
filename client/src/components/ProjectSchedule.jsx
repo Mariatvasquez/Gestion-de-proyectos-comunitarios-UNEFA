@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 
 const API_BASE = 'http://localhost:5000/api';
 
-export default function ProjectSchedule({ projectId, token }) {
+export default function ProjectSchedule({ projectId, token, readOnly = false }) {
   const [scheduleItems, setScheduleItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -211,12 +211,12 @@ export default function ProjectSchedule({ projectId, token }) {
 
   return (
     <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-      
+
       {/* Título de la sección */}
       <div style={{ borderTop: '2px solid #E2E8F0', paddingTop: '1.5rem' }}>
         <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--unefa-navy)', fontSize: '1rem', fontWeight: 'bold', margin: '0 0 0.5rem 0' }}>
           <i className="fa-solid fa-calendar-days" style={{ color: 'var(--unefa-gold)' }}></i>
-          Cronograma de Actividades Institucional (Matriz Gantt de 12 Semanas)
+          Cronograma de Actividades Institucional
         </h4>
         <p style={{ fontSize: '0.75rem', color: '#64748B', margin: 0 }}>
           Planificación y control semanal de los objetivos, actividades y tareas específicas del proyecto comunitario.
@@ -237,90 +237,92 @@ export default function ProjectSchedule({ projectId, token }) {
         </div>
       )}
 
-      {/* Formulario para agregar actividades */}
-      <form onSubmit={handleSubmit} style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '1rem' }}>
-        <h5 style={{ fontSize: '0.8rem', color: 'var(--unefa-navy)', fontWeight: 700, margin: '0 0 0.8rem 0', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-          Planificar Nueva Tarea / Fila
-        </h5>
-        
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.8rem', marginBottom: '0.8rem' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-            <label style={{ fontSize: '0.7rem', fontWeight: 700, color: '#475569' }}>Objetivo Específico</label>
-            <input 
-              type="text" 
-              name="objective" 
-              value={formData.objective} 
-              onChange={handleInputChange} 
-              placeholder="Ej. Diagnosticar necesidades de la comunidad"
-              required 
-              style={{ padding: '0.5rem', fontSize: '0.78rem', border: '1px solid #CBD5E1', borderRadius: '4px', outline: 'none' }}
-            />
-          </div>
-          
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-            <label style={{ fontSize: '0.7rem', fontWeight: 700, color: '#475569' }}>Actividad</label>
-            <input 
-              type="text" 
-              name="activity" 
-              value={formData.activity} 
-              onChange={handleInputChange} 
-              placeholder="Ej. Visita técnica y entrevistas"
-              required 
-              style={{ padding: '0.5rem', fontSize: '0.78rem', border: '1px solid #CBD5E1', borderRadius: '4px', outline: 'none' }}
-            />
-          </div>
+      {/* Formulario para agregar actividades (Oculto en modo Solo Lectura) */}
+      {!readOnly && (
+        <form onSubmit={handleSubmit} style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '1rem' }}>
+          <h5 style={{ fontSize: '0.8rem', color: 'var(--unefa-navy)', fontWeight: 700, margin: '0 0 0.8rem 0', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            Planificar Nueva Tarea / Fila
+          </h5>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-            <label style={{ fontSize: '0.7rem', fontWeight: 700, color: '#475569' }}>Tarea Específica</label>
-            <input 
-              type="text" 
-              name="task" 
-              value={formData.task} 
-              onChange={handleInputChange} 
-              placeholder="Ej. Redactar encuesta y aplicar a 20 familias"
-              required 
-              style={{ padding: '0.5rem', fontSize: '0.78rem', border: '1px solid #CBD5E1', borderRadius: '4px', outline: 'none' }}
-            />
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '0.8rem' }}>
-          <div style={{ display: 'flex', gap: '0.8rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.8rem', marginBottom: '0.8rem' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-              <label style={{ fontSize: '0.7rem', fontWeight: 700, color: '#475569' }}>Semana Inicio</label>
-              <select 
-                name="start_week" 
-                value={formData.start_week} 
-                onChange={handleInputChange} 
-                style={{ padding: '0.5rem', fontSize: '0.78rem', border: '1px solid #CBD5E1', borderRadius: '4px', background: 'white' }}
-              >
-                {weeks.map(w => <option key={w} value={w}>Semana {w}</option>)}
-              </select>
+              <label style={{ fontSize: '0.7rem', fontWeight: 700, color: '#475569' }}>Objetivo Específico</label>
+              <input
+                type="text"
+                name="objective"
+                value={formData.objective}
+                onChange={handleInputChange}
+                placeholder="Ej. Diagnosticar necesidades de la comunidad"
+                required
+                style={{ padding: '0.5rem', fontSize: '0.78rem', border: '1px solid #CBD5E1', borderRadius: '4px', outline: 'none' }}
+              />
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-              <label style={{ fontSize: '0.7rem', fontWeight: 700, color: '#475569' }}>Semana Fin</label>
-              <select 
-                name="end_week" 
-                value={formData.end_week} 
-                onChange={handleInputChange} 
-                style={{ padding: '0.5rem', fontSize: '0.78rem', border: '1px solid #CBD5E1', borderRadius: '4px', background: 'white' }}
-              >
-                {weeks.map(w => <option key={w} value={w}>Semana {w}</option>)}
-              </select>
+              <label style={{ fontSize: '0.7rem', fontWeight: 700, color: '#475569' }}>Actividad</label>
+              <input
+                type="text"
+                name="activity"
+                value={formData.activity}
+                onChange={handleInputChange}
+                placeholder="Ej. Visita técnica y entrevistas"
+                required
+                style={{ padding: '0.5rem', fontSize: '0.78rem', border: '1px solid #CBD5E1', borderRadius: '4px', outline: 'none' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+              <label style={{ fontSize: '0.7rem', fontWeight: 700, color: '#475569' }}>Tarea Específica</label>
+              <input
+                type="text"
+                name="task"
+                value={formData.task}
+                onChange={handleInputChange}
+                placeholder="Ej. Redactar encuesta y aplicar a 20 familias"
+                required
+                style={{ padding: '0.5rem', fontSize: '0.78rem', border: '1px solid #CBD5E1', borderRadius: '4px', outline: 'none' }}
+              />
             </div>
           </div>
 
-          <button 
-            type="submit" 
-            className="btn-primary" 
-            style={{ padding: '0.5rem 1rem', fontSize: '0.75rem', borderRadius: '5px', height: 'fit-content' }}
-          >
-            <i className="fa-solid fa-plus"></i>
-            Agregar al Cronograma
-          </button>
-        </div>
-      </form>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '0.8rem' }}>
+            <div style={{ display: 'flex', gap: '0.8rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                <label style={{ fontSize: '0.7rem', fontWeight: 700, color: '#475569' }}>Semana Inicio</label>
+                <select
+                  name="start_week"
+                  value={formData.start_week}
+                  onChange={handleInputChange}
+                  style={{ padding: '0.5rem', fontSize: '0.78rem', border: '1px solid #CBD5E1', borderRadius: '4px', background: 'white' }}
+                >
+                  {weeks.map(w => <option key={w} value={w}>Semana {w}</option>)}
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                <label style={{ fontSize: '0.7rem', fontWeight: 700, color: '#475569' }}>Semana Fin</label>
+                <select
+                  name="end_week"
+                  value={formData.end_week}
+                  onChange={handleInputChange}
+                  style={{ padding: '0.5rem', fontSize: '0.78rem', border: '1px solid #CBD5E1', borderRadius: '4px', background: 'white' }}
+                >
+                  {weeks.map(w => <option key={w} value={w}>Semana {w}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="btn-primary"
+              style={{ padding: '0.5rem 1rem', fontSize: '0.75rem', borderRadius: '5px', height: 'fit-content' }}
+            >
+              <i className="fa-solid fa-plus"></i>
+              Agregar al Cronograma
+            </button>
+          </div>
+        </form>
+      )}
 
       {/* Tabla del Cronograma (Gantt) */}
       {loading ? (
@@ -339,11 +341,11 @@ export default function ProjectSchedule({ projectId, token }) {
                 <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: 600, width: '22%' }}>Actividades</th>
                 <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: 600, width: '22%' }}>Tareas</th>
                 {weeks.map(w => (
-                  <th key={w} style={{ padding: '0.5rem 0', textAlign: 'center', fontWeight: 600, width: '2.5%', minWidth: '35px', borderLeft: '1px solid rgba(255,255,255,0.1)' }}>
-                    {w}
+                  <th key={w} style={{ textAlign: 'center', width: '3.5%', fontSize: '0.75rem', padding: '0.6rem 0.2rem' }}>
+                    S{w}
                   </th>
                 ))}
-                <th style={{ padding: '0.75rem', textAlign: 'center', fontWeight: 600, width: '8%' }}>Acciones</th>
+                {!readOnly && <th style={{ width: '8%', textAlign: 'center' }}>Acciones</th>}
               </tr>
             </thead>
             <tbody>
@@ -357,23 +359,23 @@ export default function ProjectSchedule({ projectId, token }) {
 
                   return tasks.map((item, taskIndex) => {
                     const isEditing = editingId === item.id;
-                    
+
                     const showObjectiveCell = isEditingObjGroup || (actIndex === 0 && taskIndex === 0);
                     const objRowSpan = isEditingObjGroup ? 1 : totalTasksObj;
 
                     const showActivityCell = isEditingObjGroup || taskIndex === 0;
                     const actRowSpan = isEditingObjGroup ? 1 : totalTasksAct;
-                    
+
                     return (
                       <tr key={item.id} style={{ borderBottom: '1px solid #E2E8F0', verticalAlign: 'middle', background: isEditing ? '#F8FAFC' : 'transparent' }}>
-                        
+
                         {/* Celda: Objetivo (con rowSpan) */}
                         {showObjectiveCell && (
                           <td rowSpan={objRowSpan} style={{ padding: '0.75rem', verticalAlign: isEditingObjGroup ? 'top' : 'middle', borderRight: '2px solid #E2E8F0', background: isEditingObjGroup ? 'transparent' : '#FAFAFA' }}>
                             {isEditing ? (
-                              <textarea 
-                                name="objective" 
-                                value={editFormData.objective} 
+                              <textarea
+                                name="objective"
+                                value={editFormData.objective}
                                 onChange={handleEditInputChange}
                                 style={{ width: '100%', padding: '0.4rem', fontSize: '0.75rem', border: '1px solid #CBD5E1', borderRadius: '4px', resize: 'vertical' }}
                               />
@@ -389,9 +391,9 @@ export default function ProjectSchedule({ projectId, token }) {
                         {showActivityCell && (
                           <td rowSpan={actRowSpan} style={{ padding: '0.75rem', verticalAlign: isEditingObjGroup ? 'top' : 'middle', borderRight: '2px solid #E2E8F0', background: isEditingObjGroup ? 'transparent' : '#FAFAFA' }}>
                             {isEditing ? (
-                              <textarea 
-                                name="activity" 
-                                value={editFormData.activity} 
+                              <textarea
+                                name="activity"
+                                value={editFormData.activity}
                                 onChange={handleEditInputChange}
                                 style={{ width: '100%', padding: '0.4rem', fontSize: '0.75rem', border: '1px solid #CBD5E1', borderRadius: '4px', resize: 'vertical' }}
                               />
@@ -406,9 +408,9 @@ export default function ProjectSchedule({ projectId, token }) {
                         {/* Celda: Tarea */}
                         <td style={{ padding: '0.75rem', verticalAlign: 'top', color: '#1E293B', fontWeight: isEditing ? 'normal' : '500', borderRight: '1px solid #E2E8F0' }}>
                           {isEditing ? (
-                            <textarea 
-                              name="task" 
-                              value={editFormData.task} 
+                            <textarea
+                              name="task"
+                              value={editFormData.task}
                               onChange={handleEditInputChange}
                               style={{ width: '100%', padding: '0.4rem', fontSize: '0.75rem', border: '1px solid #CBD5E1', borderRadius: '4px', resize: 'vertical' }}
                             />
@@ -421,113 +423,52 @@ export default function ProjectSchedule({ projectId, token }) {
                         </td>
 
                         {/* Celdas de las Semanas (Matriz Gantt) */}
-                        {weeks.map((w) => {
-                          const start = isEditing ? editFormData.start_week : item.start_week;
-                          const end = isEditing ? editFormData.end_week : item.end_week;
-                          
-                          const isSelected = w >= start && w <= end;
-                          const isStart = w === start;
-                          const isEnd = w === end;
-
+                        {weeks.map(w => {
+                          const isActive = w >= item.start_week && w <= item.end_week;
                           return (
-                            <td 
-                              key={w} 
-                              style={{ 
-                                padding: '0', 
-                                position: 'relative', 
-                                height: '45px', 
-                                borderLeft: '1px solid #E2E8F0',
-                                backgroundColor: isEditing ? '#F1F5F9' : '#fff'
-                              }}
-                            >
-                              {isSelected && (
-                                <div 
-                                  style={{
-                                    position: 'absolute',
-                                    top: '22%',
-                                    bottom: '22%',
-                                    left: isStart ? '8px' : '0',
-                                    right: isEnd ? '8px' : '0',
-                                    backgroundColor: 'var(--unefa-navy)',
-                                    borderRadius: `${isStart ? '6px' : '0'} ${isEnd ? '6px' : '0'} ${isEnd ? '6px' : '0'} ${isStart ? '6px' : '0'}`,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    color: '#fff',
-                                    boxShadow: '0 2px 4px rgba(12, 35, 64, 0.15)',
-                                    zIndex: 1
-                                  }}
-                                  title={`Semana ${w}`}
-                                >
-                                  {isStart && (
-                                    <i className="fa-solid fa-check" style={{ fontSize: '0.65rem', color: 'var(--unefa-gold)' }}></i>
-                                  )}
-                                </div>
-                              )}
+                            <td key={w} style={{
+                              padding: '0.2rem',
+                              textAlign: 'center',
+                              borderRight: '1px solid rgba(0,0,0,0.05)'
+                            }}>
+                              <div style={{
+                                height: '24px',
+                                width: '100%',
+                                background: isActive ? 'var(--unefa-gold)' : 'transparent',
+                                borderRadius: '4px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                              }}>
+                                {isActive && <i className="fa-solid fa-check" style={{ color: 'white', fontSize: '0.6rem' }}></i>}
+                              </div>
                             </td>
                           );
                         })}
 
                         {/* Acciones (Editar/Eliminar/Guardar) */}
-                        <td style={{ padding: '0.5rem', textAlign: 'center', borderLeft: '1px solid #E2E8F0' }}>
-                          {isEditing ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', alignItems: 'center' }}>
-                              <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.2rem' }}>
-                                <select 
-                                  name="start_week" 
-                                  value={editFormData.start_week} 
-                                  onChange={handleEditInputChange}
-                                  style={{ padding: '0.2rem', fontSize: '0.7rem', border: '1px solid #CBD5E1', borderRadius: '3px' }}
-                                >
-                                  {weeks.map(w => <option key={w} value={w}>S{w}</option>)}
-                                </select>
-                                <span style={{ fontSize: '0.7rem', alignSelf: 'center' }}>al</span>
-                                <select 
-                                  name="end_week" 
-                                  value={editFormData.end_week} 
-                                  onChange={handleEditInputChange}
-                                  style={{ padding: '0.2rem', fontSize: '0.7rem', border: '1px solid #CBD5E1', borderRadius: '3px' }}
-                                >
-                                  {weeks.map(w => <option key={w} value={w}>S{w}</option>)}
-                                </select>
-                              </div>
-                              <div style={{ display: 'flex', gap: '0.3rem' }}>
-                                <button 
-                                  onClick={() => saveEdit(item.id)}
-                                  style={{ padding: '0.25rem 0.5rem', background: 'var(--status-approved)', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.7rem', fontWeight: 'bold' }}
-                                  title="Guardar Cambios"
-                                >
-                                  <i className="fa-solid fa-save"></i>
-                                </button>
-                                <button 
-                                  onClick={() => setEditingId(null)}
-                                  style={{ padding: '0.25rem 0.5rem', background: '#64748B', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.7rem', fontWeight: 'bold' }}
-                                  title="Cancelar"
-                                >
-                                  <i className="fa-solid fa-times"></i>
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div style={{ display: 'flex', justifyContent: 'center', gap: '0.4rem' }}>
-                              <button 
+                        {!readOnly && (
+                          <td style={{ textAlign: 'center' }}>
+                            <div style={{ display: 'flex', gap: '0.3rem', justifyContent: 'center' }}>
+                              <button
                                 onClick={() => startEdit(item)}
-                                style={{ padding: '0.3rem 0.5rem', background: '#E2E8F0', color: 'var(--unefa-navy)', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.72rem' }}
-                                title="Editar Tarea"
+                                className="btn-secondary"
+                                style={{ padding: '0.2rem 0.4rem', fontSize: '0.7rem' }}
+                                title="Editar fila"
                               >
                                 <i className="fa-solid fa-pen"></i>
                               </button>
-                              <button 
+                              <button
                                 onClick={() => handleDelete(item.id)}
-                                style={{ padding: '0.3rem 0.5rem', background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.72rem' }}
-                                title="Eliminar Tarea"
+                                className="btn-danger"
+                                style={{ padding: '0.2rem 0.4rem', fontSize: '0.7rem', background: '#EF4444' }}
+                                title="Eliminar fila"
                               >
                                 <i className="fa-solid fa-trash"></i>
                               </button>
                             </div>
-                          )}
-                        </td>
-
+                          </td>
+                        )}
                       </tr>
                     );
                   });

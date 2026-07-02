@@ -32,6 +32,8 @@ CREATE TABLE users (
     project_id INTEGER REFERENCES current_projects(id) ON DELETE SET NULL, -- Proyecto actual asignado
     docs_submitted BOOLEAN DEFAULT FALSE,       -- Control de entrega de documentos
     tutor_type tutor_enum,                      -- Tipo de tutor
+    phone VARCHAR(20),                          -- Teléfono de contacto
+    email VARCHAR(100),                         -- Correo electrónico
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

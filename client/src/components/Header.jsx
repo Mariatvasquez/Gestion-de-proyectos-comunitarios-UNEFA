@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 
-export default function Header({ user, onLogout }) {
+export default function Header({ user, onLogout, onChangePassword }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   if (!user) return null;
 
   let roleLabel = 'Estudiante';
   let roleIcon = 'fa-user-graduate';
-  
+
   if (user.role === 'tutor') {
     roleLabel = 'Tutor Académico';
     roleIcon = 'fa-chalkboard-user';
@@ -15,6 +15,8 @@ export default function Header({ user, onLogout }) {
     roleLabel = 'Coordinador General';
     roleIcon = 'fa-user-tie';
   }
+
+
 
   return (
     <header className="app-header print-hidden">
@@ -35,29 +37,29 @@ export default function Header({ user, onLogout }) {
           <i className="fa-solid fa-shield-halved"></i>
         </div>
         <div>
-          <span style={{ 
-            fontFamily: 'var(--font-header)', 
-            fontWeight: '800', 
+          <span style={{
+            fontFamily: 'var(--font-header)',
+            fontWeight: '800',
             fontSize: '1.1rem',
             letterSpacing: '1px',
             display: 'block'
           }}>
             UNEFA <span style={{ color: 'var(--unefa-gold)' }}>SERVICIO COMUNITARIO</span>
           </span>
-          <span style={{ 
-            fontSize: '0.7rem', 
-            display: 'block', 
+          <span style={{
+            fontSize: '0.7rem',
+            display: 'block',
             opacity: 0.8,
             marginTop: '-2px'
           }}>
-            Plataforma de Control e Integración Vecinal
+            Plataforma de Control e Integración
           </span>
         </div>
       </div>
 
       {/* Botón de Menú Hamburguesa en móvil */}
-      <button 
-        className="hamburger-btn" 
+      <button
+        className="hamburger-btn"
         onClick={() => setMenuOpen(!menuOpen)}
         aria-label="Menú de navegación"
       >
@@ -91,11 +93,31 @@ export default function Header({ user, onLogout }) {
           </span>
         </div>
 
+        {/* Botón Cambiar Contraseña */}
+        <button
+          onClick={() => {
+            setMenuOpen(false);
+            onChangePassword();
+          }}
+          className="btn-secondary"
+          style={{
+            padding: '0.45rem 1rem',
+            fontSize: '0.8rem',
+            borderRadius: '8px',
+            background: 'rgba(255, 255, 255, 0.1)',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            color: 'white',
+            cursor: 'pointer'
+          }}
+        >
+          <i className="fa-solid fa-key"></i> Contraseña
+        </button>
+
         {/* Separador */}
         <div style={{ height: '30px', width: '1px', background: 'rgba(255, 255, 255, 0.2)' }}></div>
 
         {/* Botón Cerrar Sesión */}
-        <button 
+        <button
           onClick={() => {
             setMenuOpen(false);
             onLogout();
@@ -122,6 +144,8 @@ export default function Header({ user, onLogout }) {
           <i className="fa-solid fa-right-from-bracket"></i> Cerrar Sesión
         </button>
       </div>
+
+
     </header>
   );
 }

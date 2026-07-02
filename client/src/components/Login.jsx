@@ -6,6 +6,7 @@ export default function Login({ onLoginSuccess }) {
   const [docType, setDocType] = useState('V');
   const [docNumber, setDocNumber] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -236,7 +237,7 @@ export default function Login({ onLoginSuccess }) {
                 fontSize: '1.1rem'
               }}></i>
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -244,6 +245,7 @@ export default function Login({ onLoginSuccess }) {
                 style={{
                   width: '100%',
                   paddingLeft: '2.8rem',
+                  paddingRight: '3rem',
                   background: 'rgba(255, 255, 255, 0.08)',
                   border: '1.5px solid rgba(255, 255, 255, 0.15)',
                   color: 'white',
@@ -251,6 +253,26 @@ export default function Login({ onLoginSuccess }) {
                 }}
                 required
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                style={{
+                  position: 'absolute',
+                  right: '1rem',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'rgba(255, 255, 255, 0.6)',
+                  cursor: 'pointer',
+                  fontSize: '1.1rem',
+                  padding: 0,
+                  display: 'flex',
+                  alignItems: 'center'
+                }}
+              >
+                <i className={`fa-solid ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+              </button>
             </div>
           </div>
 

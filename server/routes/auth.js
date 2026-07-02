@@ -6,12 +6,24 @@ import { verifyToken } from '../middleware/auth.js';
 
 const router = express.Router();
 
+export const validatePassword = (password) => {
+  const hasUppercase = /[A-Z]/.test(password);
+  const hasLowercase = /[a-z]/.test(password);
+  const hasNumber = /[0-9]/.test(password);
+  const hasSpecial = /[@#$\/*.+\-]/.test(password);
+  return hasUppercase && hasLowercase && hasNumber && hasSpecial;
+};
+
 // Ruta de Registro de Usuario
 router.post('/register', async (req, res) => {
   const { name, identification, major, role, password, tutor_id, project_title, project_community, tutor_type } = req.body;
 
   if (!name || !identification || !major || !role || !password) {
     return res.status(400).json({ error: 'Todos los campos (name, identification, major, role, password) son obligatorios.' });
+  }
+
+  if (!validatePassword(password)) {
+    return res.status(400).json({ error: 'La contraseña debe cumplir con los siguientes requisitos: mínimo una mayúscula, una minúscula, un número y un carácter especial (@, #, $, /, *, ., +, -).' });
   }
 
   try {
@@ -84,7 +96,12 @@ router.post('/login', async (req, res) => {
 
   try {
     // Buscar al usuario
-    const result = await db.query('SELECT * FROM users WHERE identification = $1', [identification]);
+    const result = await db.query(`
+      SELECT u.*, cp.title AS project_title, cp.community_name AS project_community 
+      FROM users u
+      LEFT JOIN current_projects cp ON u.project_id = cp.id
+      WHERE u.identification = $1
+    `, [identification]);
     if (result.rowCount === 0) {
       return res.status(401).json({ error: 'Cédula o contraseña incorrectas.' });
     }
@@ -110,8 +127,11 @@ router.post('/login', async (req, res) => {
       major: user.major,
       role: user.role,
       project_id: user.project_id,
+      project_title: user.project_title,
+      project_community: user.project_community,
       docs_submitted: user.docs_submitted,
-      tutor_type: user.tutor_type
+      tutor_type: user.tutor_type,
+      tutor_institucional_id: user.tutor_institucional_id
     };
 
     const token = jwt.sign(
@@ -130,8 +150,11 @@ router.post('/login', async (req, res) => {
         major: user.major,
         role: user.role,
         project_id: user.project_id,
+        project_title: user.project_title,
+        project_community: user.project_community,
         docs_submitted: user.docs_submitted,
-        tutor_type: user.tutor_type
+        tutor_type: user.tutor_type,
+        tutor_institucional_id: user.tutor_institucional_id
       }
     });
 
@@ -144,7 +167,11 @@ router.post('/login', async (req, res) => {
 router.get('/me', verifyToken, async (req, res) => {
   try {
     const result = await db.query(
-      'SELECT id, name, identification, major, role, active, tutor_id, project_id, docs_submitted, tutor_type FROM users WHERE id = $1',
+      `SELECT u.id, u.name, u.identification, u.major, u.role, u.active, u.tutor_id, u.tutor_institucional_id, u.project_id, u.docs_submitted, u.tutor_type,
+              cp.title AS project_title, cp.community_name AS project_community
+       FROM users u
+       LEFT JOIN current_projects cp ON u.project_id = cp.id
+       WHERE u.id = $1`,
       [req.user.id]
     );
 
@@ -158,6 +185,42 @@ router.get('/me', verifyToken, async (req, res) => {
     }
 
     res.json(user);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Ruta para Cambiar Contraseña del propio usuario
+router.post('/change-password', verifyToken, async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ error: 'La contraseña actual y la nueva contraseña son obligatorias.' });
+  }
+
+  if (!validatePassword(newPassword)) {
+    return res.status(400).json({ error: 'La nueva contraseña debe cumplir con los siguientes requisitos: mínimo una mayúscula, una minúscula, un número y un carácter especial (@, #, $, /, *, ., +, -).' });
+  }
+
+  try {
+    // Obtener la contraseña actual del usuario
+    const userRes = await db.query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
+    if (userRes.rowCount === 0) {
+      return res.status(404).json({ error: 'Usuario no encontrado.' });
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, userRes.rows[0].password_hash);
+    if (!isMatch) {
+      return res.status(400).json({ error: 'La contraseña actual es incorrecta.' });
+    }
+
+    // Hashear y actualizar la nueva contraseña
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(newPassword, salt);
+
+    await db.query('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, req.user.id]);
+
+    res.json({ message: 'Contraseña actualizada con éxito.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

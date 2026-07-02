@@ -2,6 +2,7 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import * as db from '../db/index.js';
 import { verifyToken, checkRole } from '../middleware/auth.js';
+import { validatePassword } from './auth.js';
 
 const router = express.Router();
 
@@ -16,7 +17,7 @@ router.use(verifyToken, checkRole(['coordinator']));
 router.get('/usuarios', async (req, res) => {
   try {
     const result = await db.query(
-      `SELECT u.id, u.name, u.identification, u.major, u.role, u.active, u.tutor_id, u.project_id, u.docs_submitted, u.tutor_type, u.created_at,
+      `SELECT u.id, u.name, u.identification, u.major, u.role, u.active, u.tutor_id, u.tutor_institucional_id, u.project_id, u.docs_submitted, u.tutor_type, u.phone, u.email, u.created_at,
               cp.title as project_title, cp.community_name as project_community
        FROM users u
        LEFT JOIN current_projects cp ON u.project_id = cp.id
@@ -30,10 +31,14 @@ router.get('/usuarios', async (req, res) => {
 
 // Registrar nuevo usuario
 router.post('/usuarios', async (req, res) => {
-  const { name, identification, major, role, password, tutor_id, project_title, project_community, tutor_type, docs_submitted } = req.body;
+  const { name, identification, major, role, password, tutor_id, tutor_institucional_id, project_title, project_community, tutor_type, docs_submitted, phone, email } = req.body;
 
   if (!name || !identification || !major || !role || !password) {
     return res.status(400).json({ error: 'Todos los campos (name, identification, major, role, password) son obligatorios.' });
+  }
+
+  if (!validatePassword(password)) {
+    return res.status(400).json({ error: 'La contraseña debe cumplir con los siguientes requisitos: mínimo una mayúscula, una minúscula, un número y un carácter especial (@, #, $, /, *, ., +, -).' });
   }
 
   try {
@@ -67,9 +72,9 @@ router.post('/usuarios', async (req, res) => {
     const passwordHash = await bcrypt.hash(password, salt);
 
     const result = await db.query(
-      `INSERT INTO users (name, identification, major, role, password_hash, tutor_id, project_id, docs_submitted, tutor_type) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
-       RETURNING id, name, identification, major, role, active, tutor_id, project_id, docs_submitted, tutor_type`,
+      `INSERT INTO users (name, identification, major, role, password_hash, tutor_id, tutor_institucional_id, project_id, docs_submitted, tutor_type, phone, email) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) 
+       RETURNING id, name, identification, major, role, active, tutor_id, tutor_institucional_id, project_id, docs_submitted, tutor_type, phone, email`,
       [
         name,
         identification,
@@ -77,9 +82,12 @@ router.post('/usuarios', async (req, res) => {
         role,
         passwordHash,
         tutor_id ? parseInt(tutor_id) : null,
+        tutor_institucional_id ? parseInt(tutor_institucional_id) : null,
         project_id,
         docs_submitted === undefined ? false : !!docs_submitted,
-        role === 'tutor' ? tutor_type : null
+        role === 'tutor' ? tutor_type : null,
+        phone || null,
+        email || null
       ]
     );
 
@@ -92,7 +100,7 @@ router.post('/usuarios', async (req, res) => {
 // Modificar usuario
 router.put('/usuarios/:id', async (req, res) => {
   const { id } = req.params;
-  const { name, identification, major, role, password, tutor_id, project_title, project_community, tutor_type, docs_submitted } = req.body;
+  const { name, identification, major, role, password, tutor_id, tutor_institucional_id, project_title, project_community, tutor_type, docs_submitted, phone, email } = req.body;
 
   if (!name || !identification || !major || !role) {
     return res.status(400).json({ error: 'Nombre, Cédula, Carrera y Rol son obligatorios.' });
@@ -120,13 +128,16 @@ router.put('/usuarios/:id', async (req, res) => {
 
     let result;
     if (password && password.trim() !== '') {
+      if (!validatePassword(password)) {
+        return res.status(400).json({ error: 'La contraseña debe cumplir con los siguientes requisitos: mínimo una mayúscula, una minúscula, un número y un carácter especial (@, #, $, /, *, ., +, -).' });
+      }
       // Si se proporciona una nueva contraseña, hashearla y actualizarla
       const salt = await bcrypt.genSalt(10);
       const passwordHash = await bcrypt.hash(password, salt);
       
       result = await db.query(
-        `UPDATE users SET name = $1, identification = $2, major = $3, role = $4, password_hash = $5, tutor_id = $6, project_id = $7, docs_submitted = $8, tutor_type = $9
-         WHERE id = $10 RETURNING id, name, identification, major, role, active, tutor_id, project_id, docs_submitted, tutor_type`,
+        `UPDATE users SET name = $1, identification = $2, major = $3, role = $4, password_hash = $5, tutor_id = $6, tutor_institucional_id = $7, project_id = $8, docs_submitted = $9, tutor_type = $10, phone = $11, email = $12
+         WHERE id = $13 RETURNING id, name, identification, major, role, active, tutor_id, tutor_institucional_id, project_id, docs_submitted, tutor_type, phone, email`,
         [
           name,
           identification,
@@ -134,26 +145,32 @@ router.put('/usuarios/:id', async (req, res) => {
           role,
           passwordHash,
           tutor_id ? parseInt(tutor_id) : null,
+          tutor_institucional_id ? parseInt(tutor_institucional_id) : null,
           project_id,
           !!docs_submitted,
           role === 'tutor' ? tutor_type : null,
+          phone || null,
+          email || null,
           parseInt(id)
         ]
       );
     } else {
       // Si no, actualizar sin tocar la contraseña
       result = await db.query(
-        `UPDATE users SET name = $1, identification = $2, major = $3, role = $4, tutor_id = $5, project_id = $6, docs_submitted = $7, tutor_type = $8
-         WHERE id = $9 RETURNING id, name, identification, major, role, active, tutor_id, project_id, docs_submitted, tutor_type`,
+        `UPDATE users SET name = $1, identification = $2, major = $3, role = $4, tutor_id = $5, tutor_institucional_id = $6, project_id = $7, docs_submitted = $8, tutor_type = $9, phone = $10, email = $11
+         WHERE id = $12 RETURNING id, name, identification, major, role, active, tutor_id, tutor_institucional_id, project_id, docs_submitted, tutor_type, phone, email`,
         [
           name,
           identification,
           major,
           role,
           tutor_id ? parseInt(tutor_id) : null,
+          tutor_institucional_id ? parseInt(tutor_institucional_id) : null,
           project_id,
           !!docs_submitted,
           role === 'tutor' ? tutor_type : null,
+          phone || null,
+          email || null,
           parseInt(id)
         ]
       );
@@ -335,8 +352,10 @@ router.get('/stats', async (req, res) => {
     const studentsRes = await db.query("SELECT COUNT(*) as count FROM users WHERE role = 'student' AND active = true");
     const activeStudents = parseInt(studentsRes.rows[0].count || 0);
 
-    // B. Proyectos comunitarios activos (estudiantes con al menos una actividad registrada)
-    const projectsRes = await db.query("SELECT COUNT(DISTINCT student_id) as count FROM activities");
+    // B. Proyectos comunitarios activos (proyectos con estudiantes activos asignados)
+    const projectsRes = await db.query(
+      "SELECT COUNT(DISTINCT project_id) as count FROM users WHERE role = 'student' AND active = true AND project_id IS NOT NULL"
+    );
     const activeProjects = parseInt(projectsRes.rows[0].count || 0);
 
     // C. Estudiantes que completaron las 120 horas (SUM(hours_spent) en estado 'approved' >= 120)

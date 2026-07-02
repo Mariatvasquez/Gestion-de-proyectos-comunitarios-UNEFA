@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import ProjectSchedule from './ProjectSchedule';
 
 const API_BASE = 'http://localhost:5000/api';
+const BACKEND_URL = API_BASE.replace('/api', '');
 
 export default function StudentDashboard({ user, token }) {
   const [activities, setActivities] = useState([]);
   const [summary, setSummary] = useState({ approved: 0, pending: 0, correct: 0, total: 0, remaining: 120, percentage: 0 });
-  const [milestones, setMilestones] = useState([]);
+  const [projectSchedule, setProjectSchedule] = useState([]);
   const [historicalProjects, setHistoricalProjects] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -14,10 +16,9 @@ export default function StudentDashboard({ user, token }) {
   const [formData, setFormData] = useState({
     activity_date: '',
     hours_spent: '',
+    actividad_id: '',
     description: '',
     physical_attendance: false,
-    spokesperson_name: '',
-    spokesperson_phone: '',
     sworn_statement: false
   });
   const [formError, setFormError] = useState('');
@@ -40,14 +41,15 @@ export default function StudentDashboard({ user, token }) {
       setActivities(actData.activities || []);
       setSummary(actData.summary || { approved: 0, pending: 0, correct: 0, total: 0, remaining: 120, percentage: 0 });
 
-      // 2. Cronograma académico
-      const msRes = await fetch(`${API_BASE}/cronograma`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      const msData = await msRes.json();
-      setMilestones(msData || []);
+      // 2. Cronograma del proyecto para la selección en bitácoras
+      const projId = actData.summary ? user.project_id : user.project_id; // user.project_id
+      if (projId) {
+        const schedRes = await fetch(`${API_BASE}/proyectos/${projId}/cronograma`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const schedData = await schedRes.json();
+        setProjectSchedule(Array.isArray(schedData) ? schedData : []);
+      }
 
       // 3. Proyectos históricos
       const projRes = await fetch(`${API_BASE}/proyectos-historicos`, {
@@ -56,7 +58,7 @@ export default function StudentDashboard({ user, token }) {
         }
       });
       const projData = await projRes.json();
-      setHistoricalProjects(projData || []);
+      setHistoricalProjects(Array.isArray(projData) ? projData : []);
 
       setLoading(false);
     } catch (err) {
@@ -74,10 +76,9 @@ export default function StudentDashboard({ user, token }) {
     setFormData({
       activity_date: '',
       hours_spent: '',
+      actividad_id: '',
       description: '',
       physical_attendance: false,
-      spokesperson_name: '',
-      spokesperson_phone: '',
       sworn_statement: false
     });
   }, [user, token]);
@@ -140,10 +141,9 @@ export default function StudentDashboard({ user, token }) {
       setFormData({
         activity_date: '',
         hours_spent: '',
+        actividad_id: '',
         description: '',
         physical_attendance: false,
-        spokesperson_name: '',
-        spokesperson_phone: '',
         sworn_statement: false
       });
       setEditingActivity(null);
@@ -159,10 +159,9 @@ export default function StudentDashboard({ user, token }) {
     setFormData({
       activity_date: act.activity_date.split('T')[0],
       hours_spent: act.hours_spent.toString(),
+      actividad_id: act.schedule_activity_id || '',
       description: act.description,
       physical_attendance: act.physical_attendance,
-      spokesperson_name: act.spokesperson_name,
-      spokesperson_phone: act.spokesperson_phone,
       sworn_statement: true // Ya la había aceptado
     });
     // Hacer scroll al formulario
@@ -170,11 +169,16 @@ export default function StudentDashboard({ user, token }) {
   };
 
   // Filtrar proyectos históricos
-  const filteredProjects = historicalProjects.filter(p => 
-    p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    p.community.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    p.major.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredProjects = Array.isArray(historicalProjects)
+    ? historicalProjects.filter(p => {
+        if (!p.ruta_archivo) return false; // Mostrar solo si tiene PDF adjunto
+        const q = searchQuery.toLowerCase();
+        const title = p.title ? p.title.toLowerCase() : '';
+        const community = p.community ? p.community.toLowerCase() : '';
+        const major = p.major ? p.major.toLowerCase() : '';
+        return title.includes(q) || community.includes(q) || major.includes(q);
+      })
+    : [];
 
   if (loading) {
     return (
@@ -198,6 +202,12 @@ export default function StudentDashboard({ user, token }) {
           <p style={{ opacity: 0.8, fontSize: '0.9rem' }}>
             <strong>Cédula:</strong> {user.identification} | <strong>Carrera:</strong> {user.major}
           </p>
+          <div style={{ background: 'rgba(12, 35, 64, 0.05)', padding: '0.8rem', borderRadius: '8px', borderLeft: '4px solid var(--unefa-gold)', marginTop: '0.8rem' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', display: 'block' }}>PROYECTO ACTUAL:</span>
+            <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--unefa-navy)' }}>
+              {user.project_title ? `${user.project_title} (${user.project_community})` : 'Fase Inicial (Sin Proyecto Específico Asignado)'}
+            </span>
+          </div>
           <div style={{ marginTop: '1.2rem', display: 'flex', gap: '1.5rem' }}>
             <div style={{ background: 'rgba(12, 35, 64, 0.05)', padding: '0.8rem 1.2rem', borderRadius: '10px', textAlign: 'center' }}>
               <span style={{ display: 'block', fontSize: '1.5rem', fontWeight: '800', color: 'var(--status-approved)' }}>{summary.approved} hrs</span>
@@ -287,6 +297,24 @@ export default function StudentDashboard({ user, token }) {
             </div>
 
             <div className="form-group">
+              <label className="form-label">Actividad del Cronograma Institucional</label>
+              <select 
+                name="actividad_id" 
+                value={formData.actividad_id} 
+                onChange={handleInputChange} 
+                className="form-control" 
+                required 
+              >
+                <option value="">-- Seleccione a qué actividad corresponde --</option>
+                {projectSchedule.map(item => (
+                  <option key={item.id} value={item.id}>
+                    {item.activity} - {item.task}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
               <label className="form-label">Descripción de Actividades</label>
               <textarea 
                 name="description" 
@@ -311,36 +339,7 @@ export default function StudentDashboard({ user, token }) {
               <span className="form-label" style={{ margin: 0 }}>Asistencia Física Comunal (Presencial)</span>
             </div>
 
-            {/* Módulo de Aval Comunitario */}
-            <div style={{ background: 'rgba(12, 35, 64, 0.03)', border: '1px dashed #C5A059', padding: '1rem', borderRadius: '10px', margin: '1.2rem 0' }}>
-              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--unefa-navy)', display: 'block', marginBottom: '0.5rem', fontFamily: 'var(--font-header)' }}>
-                🔒 Aval Comunitario (Bloque II - Pregunta 6)
-              </span>
-              <div className="form-group" style={{ marginBottom: '0.8rem' }}>
-                <input 
-                  type="text" 
-                  name="spokesperson_name" 
-                  value={formData.spokesperson_name} 
-                  onChange={handleInputChange} 
-                  placeholder="Nombre del Vocero Comunal"
-                  className="form-control" 
-                  style={{ padding: '0.5rem 0.8rem', fontSize: '0.85rem' }}
-                  required 
-                />
-              </div>
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <input 
-                  type="text" 
-                  name="spokesperson_phone" 
-                  value={formData.spokesperson_phone} 
-                  onChange={handleInputChange} 
-                  placeholder="Teléfono del Vocero"
-                  className="form-control" 
-                  style={{ padding: '0.5rem 0.8rem', fontSize: '0.85rem' }}
-                  required 
-                />
-              </div>
-            </div>
+
 
             {/* Declaración Jurada */}
             <label style={{ display: 'flex', gap: '0.6rem', cursor: 'pointer', margin: '1rem 0', fontSize: '0.8rem', lineHeight: '1.4', fontWeight: 500 }}>
@@ -374,10 +373,9 @@ export default function StudentDashboard({ user, token }) {
                   setFormData({
                     activity_date: '',
                     hours_spent: '',
+                    actividad_id: '',
                     description: '',
                     physical_attendance: false,
-                    spokesperson_name: '',
-                    spokesperson_phone: '',
                     sworn_statement: false
                   });
                 }}
@@ -463,7 +461,6 @@ export default function StudentDashboard({ user, token }) {
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', fontSize: '0.8rem', opacity: 0.9 }}>
                       <span><strong>Horas:</strong> {act.hours_spent} hrs</span>
                       <span><strong>Modalidad:</strong> {act.physical_attendance ? '📍 Presencial en Comunidad' : '💻 Remoto / Análisis'}</span>
-                      <span><strong>Vocero:</strong> {act.spokesperson_name} ({act.spokesperson_phone})</span>
                     </div>
 
                     {act.status === 'correct' && act.feedback_comment && (
@@ -489,8 +486,8 @@ export default function StudentDashboard({ user, token }) {
         </div>
       </div>
 
-      {/* 3. Cronograma e Instructivo de Redacción */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.8fr 1.2fr', gap: '2rem' }}>
+      {/* 3. Cronograma */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '2rem' }}>
         
         {/* Cronograma de Hitos */}
         <div className="glass-panel" style={{ padding: '1.8rem' }}>
@@ -499,62 +496,11 @@ export default function StudentDashboard({ user, token }) {
             Visor del Cronograma Académico
           </h3>
 
-          {milestones.length === 0 ? (
-            <p style={{ fontSize: '0.9rem', opacity: 0.7 }}>No hay hitos programados en el cronograma institucional.</p>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem', position: 'relative', paddingLeft: '1.5rem', borderLeft: '2px solid rgba(197, 160, 89, 0.4)' }}>
-              {milestones.map((ms, index) => (
-                <div key={ms.id} style={{ position: 'relative' }}>
-                  {/* Punto del timeline */}
-                  <div style={{ 
-                    position: 'absolute', 
-                    left: '-1.95rem', 
-                    top: '3px',
-                    width: '12px', 
-                    height: '12px', 
-                    borderRadius: '50%', 
-                    background: 'var(--unefa-gold)',
-                    border: '3px solid white',
-                    boxShadow: '0 0 0 2px var(--unefa-navy)'
-                  }}></div>
-                  
-                  <span style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--unefa-gold)' }}>
-                    {new Date(ms.event_date).toLocaleDateString('es-ES', { timeZone: 'UTC' })}
-                  </span>
-                  <h4 style={{ fontSize: '0.95rem', marginTop: '0.1rem', color: 'var(--unefa-navy)' }}>{ms.title}</h4>
-                </div>
-              ))}
-            </div>
-          )}
+          <ProjectSchedule projectId={user.project_id || 'fase_inicial'} token={token} readOnly={true} />
         </div>
 
-        {/* Instructivos de Informe Card */}
-        <div className="glass-panel" style={{ padding: '1.8rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '1rem', background: 'linear-gradient(135deg, rgba(12, 35, 64, 0.02) 0%, rgba(197, 160, 89, 0.05) 100%)' }}>
-          <div>
-            <h3 style={{ marginBottom: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <i className="fa-solid fa-file-pdf" style={{ color: 'var(--unefa-navy)' }}></i>
-              Pautas de Redacción
-            </h3>
-            <p style={{ fontSize: '0.85rem', lineHeight: '1.4', opacity: 0.8 }}>
-              Descarga interactiva del instructivo formal oficial de la UNEFA para la redacción de informes del Servicio Comunitario, adaptado al reglamento institucional vigente.
-            </p>
-          </div>
-          
-          <div style={{ background: 'white', padding: '0.8rem', borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '0.8rem' }}>
-            <strong>💡 Recomendación INTEI:</strong> Elabora la descripción de tus bitácoras de manera clara, mencionando las metas alcanzadas y el impacto comunitario presencial.
-          </div>
 
-          <button 
-            className="btn-primary" 
-            style={{ width: '100%', justifyContent: 'center' }}
-            onClick={() => {
-              // Simulación de descarga interactiva
-              alert('📥 Descargando instructivo oficial "Instructivo-Servicio-Comunitario-UNEFA.pdf" (Simulado)');
-            }}
-          >
-            <i className="fa-solid fa-download"></i> Descargar Pautas Oficiales
-          </button>
-        </div>
+
       </div>
 
       {/* 4. Repositorio de Proyectos Históricos */}
@@ -614,6 +560,30 @@ export default function StudentDashboard({ user, token }) {
                     {proj.summary}
                   </p>
                 </div>
+
+                {proj.ruta_archivo && (
+                  <div style={{ marginTop: '0.5rem' }}>
+                    <a 
+                      href={`${BACKEND_URL}/${proj.ruta_archivo}`} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="btn-primary"
+                      style={{
+                        padding: '0.35rem 0.8rem',
+                        fontSize: '0.78rem',
+                        borderRadius: '6px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.3rem',
+                        textDecoration: 'none',
+                        boxShadow: 'none'
+                      }}
+                    >
+                      <i className="fa-solid fa-arrow-up-right-from-square"></i>
+                      Ver PDF
+                    </a>
+                  </div>
+                )}
               </div>
             ))}
           </div>

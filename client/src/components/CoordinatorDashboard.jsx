@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import ActaModal from './ActaModal';
 import ProjectSchedule from './ProjectSchedule';
+import ProjectHistory from './ProjectHistory';
 
 const API_BASE = 'http://localhost:5000/api';
+const BACKEND_URL = API_BASE.replace('/api', '');
 
 export default function CoordinatorDashboard({ user, token }) {
   const [stats, setStats] = useState({ activeStudents: 0, activeProjects: 0, completedStudents: 0 });
@@ -23,11 +25,14 @@ export default function CoordinatorDashboard({ user, token }) {
     major: '',
     role: 'student',
     tutor_id: '',
+    tutor_institucional_id: '',
     password: '',
     project_title: '',
     project_community: '',
     tutor_type: 'académico',
-    docs_submitted: false
+    docs_submitted: false,
+    phone: '',
+    email: ''
   });
   const [editingUser, setEditingUser] = useState(null);
   const [userFormError, setUserFormError] = useState('');
@@ -38,8 +43,23 @@ export default function CoordinatorDashboard({ user, token }) {
   const [proyectoSeleccionado, setProyectoSeleccionado] = useState(null);
   const [actaFormats, setActaFormats] = useState({});
   // ----------------------------------------
-  
+
   const [selectedGanttProject, setSelectedGanttProject] = useState('fase_inicial');
+
+  // Estados para el Repositorio de Proyectos Históricos
+  const [historicalProjects, setHistoricalProjects] = useState([]);
+  const [searchQueryHistorical, setSearchQueryHistorical] = useState('');
+  const [newHistFormData, setNewHistFormData] = useState({
+    title: '',
+    major: '',
+    academic_year: new Date().getFullYear(),
+    community: '',
+    summary: ''
+  });
+  const [histFile, setHistFile] = useState(null);
+  const [histUploadError, setHistUploadError] = useState('');
+  const [histUploadSuccess, setHistUploadSuccess] = useState('');
+  const [histUploading, setHistUploading] = useState(false);
 
 
   const toggleCoordProject = (pid) => {
@@ -57,7 +77,7 @@ export default function CoordinatorDashboard({ user, token }) {
   const loadData = async () => {
     try {
       setLoading(true);
-      
+
       const headers = {
         'Authorization': `Bearer ${token}`
       };
@@ -81,6 +101,11 @@ export default function CoordinatorDashboard({ user, token }) {
       const actRes = await fetch(`${API_BASE}/admin/reportes`, { headers });
       const actData = await actRes.json();
       setActivities(actData || []);
+
+      // 5. Proyectos Históricos
+      const histRes = await fetch(`${API_BASE}/proyectos-historicos`, { headers });
+      const histData = await histRes.json();
+      setHistoricalProjects(Array.isArray(histData) ? histData : []);
 
       setLoading(false);
     } catch (err) {
@@ -113,19 +138,20 @@ export default function CoordinatorDashboard({ user, token }) {
       const url = editingUser ? `${API_BASE}/admin/usuarios/${editingUser.id}` : `${API_BASE}/admin/usuarios`;
       const method = editingUser ? 'PUT' : 'POST';
 
-      // Si es un nuevo usuario y no se especifica contraseña, usar "unefa123" por defecto
-      const submitPassword = userFormData.password.trim() || (editingUser ? '' : 'unefa123');
+      // Si es un nuevo usuario y no se especifica contraseña, usar "Unefa123*" por defecto
+      const submitPassword = userFormData.password.trim() || (editingUser ? '' : 'Unefa123*');
 
       const res = await fetch(url, {
         method,
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           ...userFormData,
           password: submitPassword,
-          tutor_id: userFormData.tutor_id ? parseInt(userFormData.tutor_id) : null
+          tutor_id: userFormData.tutor_id ? parseInt(userFormData.tutor_id) : null,
+          tutor_institucional_id: userFormData.tutor_institucional_id ? parseInt(userFormData.tutor_institucional_id) : null
         })
       });
 
@@ -137,7 +163,7 @@ export default function CoordinatorDashboard({ user, token }) {
       }
 
       setUserFormSuccess(editingUser ? '✅ Usuario actualizado con éxito.' : `✅ Usuario creado con éxito. Contraseña por defecto: ${submitPassword}`);
-      setUserFormData({ name: '', identification: '', major: '', role: 'student', tutor_id: '', password: '', project_title: '', project_community: '', tutor_type: 'académico', docs_submitted: false });
+      setUserFormData({ name: '', identification: '', major: '', role: 'student', tutor_id: '', tutor_institucional_id: '', password: '', project_title: '', project_community: '', tutor_type: 'académico', docs_submitted: false, phone: '', email: '' });
       setEditingUser(null);
       loadData();
     } catch (err) {
@@ -150,7 +176,7 @@ export default function CoordinatorDashboard({ user, token }) {
     try {
       const res = await fetch(`${API_BASE}/admin/usuarios/${u.id}/toggle`, {
         method: 'PUT',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
@@ -192,11 +218,14 @@ export default function CoordinatorDashboard({ user, token }) {
       major: u.major,
       role: u.role,
       tutor_id: u.tutor_id ? u.tutor_id.toString() : '',
+      tutor_institucional_id: u.tutor_institucional_id ? u.tutor_institucional_id.toString() : '',
       password: '',
       project_title: u.project_title || '',
       project_community: u.project_community || '',
       tutor_type: u.tutor_type || 'académico',
-      docs_submitted: !!u.docs_submitted
+      docs_submitted: !!u.docs_submitted,
+      phone: u.phone || '',
+      email: u.email || ''
     });
   };
 
@@ -204,7 +233,7 @@ export default function CoordinatorDashboard({ user, token }) {
   const handleDeleteMilestone = async (id) => {
     if (!window.confirm('¿Seguro que deseas eliminar este hito del cronograma?')) return;
     try {
-      const res = await fetch(`${API_BASE}/admin/cronograma/${id}`, { 
+      const res = await fetch(`${API_BASE}/admin/cronograma/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -227,13 +256,13 @@ export default function CoordinatorDashboard({ user, token }) {
     try {
       const res = await fetch(`${API_BASE}/admin/cronograma`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(milestoneFormData)
       });
-      
+
       if (res.ok) {
         setMilestoneSuccess('✅ Hito académico agregado.');
         setMilestoneFormData({ title: '', event_date: '', project_id: '' });
@@ -244,16 +273,85 @@ export default function CoordinatorDashboard({ user, token }) {
     }
   };
 
+  const handleHistSubmit = async (e) => {
+    e.preventDefault();
+    setHistUploadError('');
+    setHistUploadSuccess('');
+
+    if (!newHistFormData.title || !newHistFormData.major || !newHistFormData.academic_year) {
+      setHistUploadError('El título, la carrera y el año académico son obligatorios.');
+      return;
+    }
+
+    setHistUploading(true);
+
+    const formData = new FormData();
+    formData.append('title', newHistFormData.title);
+    formData.append('major', newHistFormData.major);
+    formData.append('academic_year', newHistFormData.academic_year);
+    formData.append('community', newHistFormData.community || 'N/A');
+    formData.append('summary', newHistFormData.summary || '');
+    if (histFile) {
+      formData.append('archivo', histFile);
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/proyectos-historicos`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      const result = await res.json();
+      if (!res.ok) {
+        throw new Error(result.error || 'Error al guardar el proyecto histórico.');
+      }
+
+      setHistUploadSuccess('✅ Proyecto histórico registrado exitosamente en el repositorio.');
+      setNewHistFormData({
+        title: '',
+        major: '',
+        academic_year: new Date().getFullYear(),
+        community: '',
+        summary: ''
+      });
+      setHistFile(null);
+      const fileInput = document.getElementById('hist-file-input');
+      if (fileInput) fileInput.value = '';
+
+      // Recargar datos
+      loadData();
+    } catch (err) {
+      setHistUploadError(err.message);
+    } finally {
+      setHistUploading(false);
+    }
+  };
+
+  const filteredHistoricalProjects = Array.isArray(historicalProjects)
+    ? historicalProjects.filter(p => {
+      if (!p.ruta_archivo) return false; // Mostrar solo si tiene PDF adjunto
+      const q = searchQueryHistorical.toLowerCase();
+      const title = p.title ? p.title.toLowerCase() : '';
+      const major = p.major ? p.major.toLowerCase() : '';
+      const community = p.community ? p.community.toLowerCase() : '';
+      return title.includes(q) || major.includes(q) || community.includes(q);
+    })
+    : [];
 
   // Filtrar lista de usuarios
   const filteredUsers = users.filter(u => {
-    const matchesSearch = u.name.toLowerCase().includes(userSearch.toLowerCase()) || 
-                          u.identification.toLowerCase().includes(userSearch.toLowerCase()) ||
-                          u.major.toLowerCase().includes(userSearch.toLowerCase());
+    const matchesSearch = u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
+      u.identification.toLowerCase().includes(userSearch.toLowerCase()) ||
+      u.major.toLowerCase().includes(userSearch.toLowerCase());
     const matchesRole = roleFilter === 'all' ? true : u.role === roleFilter;
     return matchesSearch && matchesRole;
   });
 
+  const academicTutors = users.filter(u => u.role === 'tutor' && (!u.tutor_type || u.tutor_type === 'académico'));
+  const institutionalTutors = users.filter(u => u.role === 'tutor' && u.tutor_type === 'institucional');
   const tutors = users.filter(u => u.role === 'tutor');
 
   // Lógica de agrupación en memoria de los estudiantes activos por proyecto comunitario
@@ -272,7 +370,7 @@ export default function CoordinatorDashboard({ user, token }) {
         students: []
       };
     }
-    
+
     const approvedHours = activities
       .filter(act => act.student_id === student.id && act.status === 'approved')
       .reduce((sum, act) => sum + act.hours_spent, 0);
@@ -297,7 +395,7 @@ export default function CoordinatorDashboard({ user, token }) {
 
   return (
     <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-      
+
       {/* SECCIÓN IMPRIMIBLE EXCLUSIVA (print-only) */}
       <div style={{ display: 'none' }} className="print-header">
         <h1 style={{ fontFamily: 'var(--font-header)', color: 'var(--unefa-navy)', fontWeight: '800' }}>
@@ -361,7 +459,7 @@ export default function CoordinatorDashboard({ user, token }) {
 
       {/* SECCIÓN NORMAL WEB (no-print) */}
       <div className="print-container">
-        
+
         {/* Header e Información General */}
         <div className="glass-panel no-print" style={{ padding: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
@@ -377,11 +475,11 @@ export default function CoordinatorDashboard({ user, token }) {
         </div>
 
         {/* Menú de Navegación por Pestañas */}
-        <div className="glass-panel no-print" style={{ 
-          display: 'flex', 
-          gap: '0.8rem', 
-          padding: '0.6rem', 
-          borderRadius: '12px', 
+        <div className="glass-panel no-print" style={{
+          display: 'flex',
+          gap: '0.8rem',
+          padding: '0.6rem',
+          borderRadius: '12px',
           margin: '1.5rem 0',
           justifyContent: 'space-between',
           flexWrap: 'wrap',
@@ -390,7 +488,7 @@ export default function CoordinatorDashboard({ user, token }) {
           backdropFilter: 'blur(10px)',
           boxShadow: 'var(--shadow-premium)'
         }}>
-          <button 
+          <button
             onClick={() => setVistaActiva('estadisticas')}
             style={{
               flex: '1 1 200px',
@@ -413,7 +511,7 @@ export default function CoordinatorDashboard({ user, token }) {
           >
             <i className="fa-solid fa-chart-simple"></i> Inicio (Estadísticas)
           </button>
-          <button 
+          <button
             onClick={() => setVistaActiva('proyectos')}
             style={{
               flex: '1 1 200px',
@@ -436,7 +534,7 @@ export default function CoordinatorDashboard({ user, token }) {
           >
             <i className="fa-solid fa-folder-tree"></i> Proyectos y Actas
           </button>
-          <button 
+          <button
             onClick={() => setVistaActiva('usuarios')}
             style={{
               flex: '1 1 200px',
@@ -457,9 +555,9 @@ export default function CoordinatorDashboard({ user, token }) {
               boxShadow: vistaActiva === 'usuarios' ? '0 4px 15px rgba(12, 35, 64, 0.15)' : 'none'
             }}
           >
-            <i className="fa-solid fa-users-gear"></i> Usuarios (CRUD)
+            <i className="fa-solid fa-users-gear"></i> Usuarios
           </button>
-          <button 
+          <button
             onClick={() => setVistaActiva('cronograma')}
             style={{
               flex: '1 1 200px',
@@ -485,7 +583,7 @@ export default function CoordinatorDashboard({ user, token }) {
         </div>
 
         {/* Sub-views Condicionales */}
-        
+
         {/* VISTA 1: ESTADÍSTICAS */}
         {vistaActiva === 'estadisticas' && (
           <div className="no-print" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem', margin: '2rem 0' }}>
@@ -529,7 +627,7 @@ export default function CoordinatorDashboard({ user, token }) {
                 <i className="fa-solid fa-folder-tree" style={{ color: 'var(--unefa-gold)' }}></i>
                 Monitoreo de Proyectos Comunitarios Activos
               </h3>
-              
+
               {projectsList.length === 0 ? (
                 <p style={{ fontSize: '0.9rem', opacity: 0.7, textAlign: 'center', padding: '1rem' }}>No hay proyectos comunitarios activos registrados.</p>
               ) : (
@@ -537,20 +635,20 @@ export default function CoordinatorDashboard({ user, token }) {
                   {projectsList.map(project => {
                     const pid = project.id || 0;
                     const isExpanded = !!expandedCoordProjects[pid];
-                    
+
                     return (
-                      <div 
-                        key={pid} 
-                        style={{ 
-                          background: 'white', 
-                          border: '1px solid #E2E8F0', 
-                          borderRadius: '12px', 
-                          overflow: 'hidden', 
-                          boxShadow: '0 2px 5px rgba(0,0,0,0.01)' 
+                      <div
+                        key={pid}
+                        style={{
+                          background: 'white',
+                          border: '1px solid #E2E8F0',
+                          borderRadius: '12px',
+                          overflow: 'hidden',
+                          boxShadow: '0 2px 5px rgba(0,0,0,0.01)'
                         }}
                       >
                         {/* Cabecera de Proyecto */}
-                        <div 
+                        <div
                           onClick={() => toggleCoordProject(pid)}
                           style={{
                             background: 'rgba(12, 35, 64, 0.02)',
@@ -574,8 +672,8 @@ export default function CoordinatorDashboard({ user, token }) {
                             <span style={{ fontSize: '0.65rem', background: 'var(--unefa-navy)', color: 'white', padding: '0.15rem 0.4rem', borderRadius: '10px', fontWeight: 'bold' }}>
                               {project.students.length} Est.
                             </span>
-                            <i 
-                              className={`fa-solid ${isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'}`} 
+                            <i
+                              className={`fa-solid ${isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'}`}
                               style={{ color: 'var(--unefa-gold)', fontSize: '0.8rem' }}
                             ></i>
                           </div>
@@ -588,7 +686,7 @@ export default function CoordinatorDashboard({ user, token }) {
                             {project.students.length > 0 && (
                               <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '0.5rem', paddingBottom: '0.5rem', borderBottom: '1px solid #E2E8F0' }}>
                                 <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--unefa-navy)' }}>Formato del Acta:</label>
-                                <select 
+                                <select
                                   value={actaFormats[pid] || 'horizontal'}
                                   onChange={(e) => setActaFormats(prev => ({ ...prev, [pid]: e.target.value }))}
                                   style={{ padding: '0.3rem 0.5rem', fontSize: '0.75rem', borderRadius: '5px', border: '1px solid #CBD5E1', outline: 'none' }}
@@ -597,13 +695,13 @@ export default function CoordinatorDashboard({ user, token }) {
                                   <option value="vertical_con_nombre">Vertical (Con nombre del proyecto)</option>
                                   <option value="vertical_sin_nombre">Vertical (Sin nombre del proyecto)</option>
                                 </select>
-                                <button 
+                                <button
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setProyectoSeleccionado(pid);
                                     setMostrarModal(true);
                                   }}
-                                  className="btn-primary" 
+                                  className="btn-primary"
                                   style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', borderRadius: '5px', marginLeft: '0.5rem' }}
                                 >
                                   <i className="fa-solid fa-file-pdf" style={{ marginRight: '5px' }}></i>
@@ -616,16 +714,16 @@ export default function CoordinatorDashboard({ user, token }) {
                               <p style={{ fontSize: '0.75rem', opacity: 0.6, padding: '0.5rem', textAlign: 'center' }}>No hay estudiantes asignados.</p>
                             ) : (
                               project.students.map(student => (
-                                <div 
-                                  key={student.id} 
-                                  style={{ 
-                                    background: 'white', 
-                                    border: '1px solid #E2E8F0', 
-                                    borderRadius: '8px', 
-                                    padding: '0.75rem', 
-                                    display: 'flex', 
-                                    flexDirection: 'column', 
-                                    gap: '0.4rem' 
+                                <div
+                                  key={student.id}
+                                  style={{
+                                    background: 'white',
+                                    border: '1px solid #E2E8F0',
+                                    borderRadius: '8px',
+                                    padding: '0.75rem',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '0.4rem'
                                   }}
                                 >
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -635,23 +733,23 @@ export default function CoordinatorDashboard({ user, token }) {
                                       </h5>
                                       <span style={{ fontSize: '0.68rem', opacity: 0.6 }}>CI: {student.identification}</span>
                                     </div>
-                                    
+
                                     {/* Checkbox de entrega de documentos */}
-                                    <label style={{ 
-                                      display: 'flex', 
-                                      alignItems: 'center', 
-                                      gap: '0.3rem', 
-                                      fontSize: '0.7rem', 
-                                      fontWeight: 700, 
-                                      cursor: 'pointer', 
+                                    <label style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '0.3rem',
+                                      fontSize: '0.7rem',
+                                      fontWeight: 700,
+                                      cursor: 'pointer',
                                       color: student.docs_submitted ? 'var(--status-approved)' : '#64748B',
                                       background: student.docs_submitted ? 'rgba(16, 185, 129, 0.08)' : 'rgba(100, 116, 139, 0.08)',
                                       padding: '0.2rem 0.5rem',
                                       borderRadius: '6px'
                                     }}>
-                                      <input 
-                                        type="checkbox" 
-                                        checked={student.docs_submitted} 
+                                      <input
+                                        type="checkbox"
+                                        checked={student.docs_submitted}
                                         onChange={() => handleToggleDocs(student.id, student.docs_submitted)}
                                         style={{ cursor: 'pointer', margin: 0 }}
                                       />
@@ -667,9 +765,9 @@ export default function CoordinatorDashboard({ user, token }) {
                                     </span>
                                   </div>
                                   <div className="progress-bar-container" style={{ height: '6px', borderRadius: '3px' }}>
-                                    <div 
-                                      className="progress-bar-fill" 
-                                      style={{ 
+                                    <div
+                                      className="progress-bar-fill"
+                                      style={{
                                         width: `${student.progressPercentage}%`,
                                         borderRadius: '3px',
                                         background: student.approvedHours >= 120 ? 'linear-gradient(90deg, #10B981, #059669)' : 'linear-gradient(90deg, #3B82F6, #1D4ED8)'
@@ -687,6 +785,226 @@ export default function CoordinatorDashboard({ user, token }) {
                 </div>
               )}
             </div>
+
+            {/* Repositorio de Proyectos Históricos (Sección Independiente) */}
+            <div className="glass-panel no-print" style={{ padding: '1.8rem', display: 'flex', flexDirection: 'column', gap: '1.2rem', marginTop: '2rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                <div>
+                  <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--unefa-navy)' }}>
+                    <i className="fa-solid fa-book-bookmark" style={{ color: 'var(--unefa-gold)' }}></i>
+                    Repositorio de Proyectos Históricos
+                  </h3>
+                  <p style={{ fontSize: '0.85rem', opacity: 0.8 }}>Gestión, carga de documentos PDF y búsqueda de proyectos de años anteriores.</p>
+                </div>
+
+                <div style={{ position: 'relative', width: '300px' }}>
+                  <input
+                    type="text"
+                    placeholder="Buscar por título, carrera o comunidad..."
+                    value={searchQueryHistorical}
+                    onChange={(e) => setSearchQueryHistorical(e.target.value)}
+                    className="form-control"
+                    style={{ width: '100%', paddingLeft: '2.5rem', fontSize: '0.85rem', border: '1px solid #CBD5E1', borderRadius: '8px' }}
+                  />
+                  <i className="fa-solid fa-magnifying-glass" style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }}></i>
+                </div>
+              </div>
+
+              {/* Formulario para registrar nuevo proyecto histórico con PDF */}
+              <div style={{ background: 'rgba(12, 35, 64, 0.02)', border: '1.5px dashed rgba(197, 160, 89, 0.4)', borderRadius: '12px', padding: '1.5rem' }}>
+                <h4 style={{ fontSize: '0.95rem', color: 'var(--unefa-navy)', marginBottom: '1rem', fontWeight: 700 }}>
+                  <i className="fa-solid fa-plus" style={{ color: 'var(--unefa-gold)', marginRight: '0.5rem' }}></i>
+                  Registrar Nuevo Proyecto Histórico (Cargar PDF)
+                </h4>
+
+                {histUploadError && (
+                  <div className="glass-card" style={{ borderLeftColor: 'var(--status-correct)', background: 'rgba(239, 68, 68, 0.05)', padding: '0.6rem 1rem', marginBottom: '1rem' }}>
+                    <span style={{ color: '#9B2C2C', fontSize: '0.8rem', fontWeight: 600 }}>{histUploadError}</span>
+                  </div>
+                )}
+                {histUploadSuccess && (
+                  <div className="glass-card" style={{ borderLeftColor: 'var(--status-approved)', background: 'rgba(16, 185, 129, 0.05)', padding: '0.6rem 1rem', marginBottom: '1rem' }}>
+                    <span style={{ color: '#065F46', fontSize: '0.8rem', fontWeight: 600 }}>{histUploadSuccess}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleHistSubmit} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', alignItems: 'end' }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: 700 }}>Título del Proyecto</label>
+                    <input
+                      type="text"
+                      placeholder="Ej. Sistema de Inventario para Ambulatorio"
+                      value={newHistFormData.title}
+                      onChange={(e) => setNewHistFormData(prev => ({ ...prev, title: e.target.value }))}
+                      className="form-control"
+                      style={{ padding: '0.45rem 0.8rem', fontSize: '0.85rem', border: '1px solid #CBD5E1', borderRadius: '8px' }}
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: 700 }}>Carrera</label>
+                    <input
+                      type="text"
+                      placeholder="Ej. Ingeniería de Sistemas"
+                      value={newHistFormData.major}
+                      onChange={(e) => setNewHistFormData(prev => ({ ...prev, major: e.target.value }))}
+                      className="form-control"
+                      style={{ padding: '0.45rem 0.8rem', fontSize: '0.85rem', border: '1px solid #CBD5E1', borderRadius: '8px' }}
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: 700 }}>Año Académico</label>
+                    <input
+                      type="number"
+                      placeholder="Ej. 2025"
+                      value={newHistFormData.academic_year}
+                      onChange={(e) => setNewHistFormData(prev => ({ ...prev, academic_year: parseInt(e.target.value, 10) || '' }))}
+                      className="form-control"
+                      style={{ padding: '0.45rem 0.8rem', fontSize: '0.85rem', border: '1px solid #CBD5E1', borderRadius: '8px' }}
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: 700 }}>Comunidad</label>
+                    <input
+                      type="text"
+                      placeholder="Ej. Sector Central Las Flores"
+                      value={newHistFormData.community}
+                      onChange={(e) => setNewHistFormData(prev => ({ ...prev, community: e.target.value }))}
+                      className="form-control"
+                      style={{ padding: '0.45rem 0.8rem', fontSize: '0.85rem', border: '1px solid #CBD5E1', borderRadius: '8px' }}
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: 700 }}>Resumen (Opcional)</label>
+                    <input
+                      type="text"
+                      placeholder="Breve descripción del proyecto..."
+                      value={newHistFormData.summary}
+                      onChange={(e) => setNewHistFormData(prev => ({ ...prev, summary: e.target.value }))}
+                      className="form-control"
+                      style={{ padding: '0.45rem 0.8rem', fontSize: '0.85rem', border: '1px solid #CBD5E1', borderRadius: '8px' }}
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ fontSize: '0.78rem', fontWeight: 700 }}>Archivo PDF</label>
+                    <input
+                      id="hist-file-input"
+                      type="file"
+                      accept=".pdf"
+                      onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (file && file.type !== 'application/pdf') {
+                          alert('Únicamente se permiten archivos en formato PDF.');
+                          e.target.value = '';
+                          setHistFile(null);
+                        } else {
+                          setHistFile(file);
+                        }
+                      }}
+                      style={{
+                        fontSize: '0.8rem',
+                        background: 'white',
+                        border: '1px solid #CBD5E1',
+                        borderRadius: '8px',
+                        padding: '0.35rem 0.6rem',
+                        cursor: 'pointer',
+                        width: '100%'
+                      }}
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="btn-accent"
+                    style={{ padding: '0.5rem 1.2rem', fontSize: '0.85rem', height: '38px', justifyContent: 'center', width: '100%' }}
+                    disabled={histUploading}
+                  >
+                    {histUploading ? (
+                      <>
+                        <i className="fa-solid fa-circle-notch fa-spin"></i> Registrando...
+                      </>
+                    ) : (
+                      <>
+                        <i className="fa-solid fa-circle-plus"></i> Registrar Proyecto
+                      </>
+                    )}
+                  </button>
+                </form>
+              </div>
+
+              {/* Listado de Proyectos Históricos */}
+              {filteredHistoricalProjects.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '2rem', color: '#94A3B8' }}>
+                  <p style={{ fontWeight: 600 }}>No hay proyectos históricos que coincidan con la búsqueda.</p>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1rem', marginTop: '1rem' }}>
+                  {filteredHistoricalProjects.map(proj => (
+                    <div
+                      key={proj.id}
+                      className="glass-card"
+                      style={{
+                        borderLeftColor: 'var(--unefa-gold)',
+                        background: 'rgba(255, 255, 255, 0.4)',
+                        padding: '1.2rem',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        gap: '0.8rem'
+                      }}
+                    >
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: 700, color: 'var(--unefa-navy)', opacity: 0.8, marginBottom: '0.3rem' }}>
+                          <span>{proj.major}</span>
+                          <span>Año: {proj.academic_year}</span>
+                        </div>
+                        <h4 style={{ fontSize: '0.95rem', margin: '0.2rem 0', color: 'var(--unefa-navy)', fontWeight: 800 }}>{proj.title}</h4>
+                        <p style={{ fontSize: '0.85rem', opacity: 0.9, fontStyle: 'italic', margin: '0.2rem 0' }}>
+                          📍 <strong>Comunidad:</strong> {proj.community}
+                        </p>
+                        {proj.summary && (
+                          <p style={{ fontSize: '0.8rem', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: '1.4', marginTop: '0.4rem' }}>
+                            {proj.summary}
+                          </p>
+                        )}
+                      </div>
+
+                      {proj.ruta_archivo && (
+                        <div style={{ marginTop: '0.5rem' }}>
+                          <a
+                            href={`${BACKEND_URL}/${proj.ruta_archivo}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn-primary"
+                            style={{
+                              padding: '0.35rem 0.8rem',
+                              fontSize: '0.78rem',
+                              borderRadius: '6px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.3rem',
+                              textDecoration: 'none',
+                              boxShadow: 'none'
+                            }}
+                          >
+                            <i className="fa-solid fa-arrow-up-right-from-square"></i>
+                            Ver PDF
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
           </div>
         )}
 
@@ -700,9 +1018,9 @@ export default function CoordinatorDashboard({ user, token }) {
               </h3>
 
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                <input 
-                  type="text" 
-                  placeholder="Buscar usuario..." 
+                <input
+                  type="text"
+                  placeholder="Buscar usuario..."
                   value={userSearch}
                   onChange={(e) => setUserSearch(e.target.value)}
                   className="form-control"
@@ -742,8 +1060,8 @@ export default function CoordinatorDashboard({ user, token }) {
               <form onSubmit={handleUserSubmit} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.8rem', alignItems: 'end' }}>
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label" style={{ fontSize: '0.75rem' }}>Nombre Completo</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     placeholder="Ej. Ana Gómez"
                     value={userFormData.name}
                     onChange={(e) => setUserFormData(prev => ({ ...prev, name: e.target.value }))}
@@ -755,8 +1073,8 @@ export default function CoordinatorDashboard({ user, token }) {
 
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label" style={{ fontSize: '0.75rem' }}>Cédula de Identidad</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     placeholder="Ej. V-25123456"
                     value={userFormData.identification}
                     onChange={(e) => setUserFormData(prev => ({ ...prev, identification: e.target.value }))}
@@ -768,8 +1086,8 @@ export default function CoordinatorDashboard({ user, token }) {
 
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label" style={{ fontSize: '0.75rem' }}>Carrera</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     placeholder="Ej. Ingeniería de Sistemas"
                     value={userFormData.major}
                     onChange={(e) => setUserFormData(prev => ({ ...prev, major: e.target.value }))}
@@ -780,8 +1098,32 @@ export default function CoordinatorDashboard({ user, token }) {
                 </div>
 
                 <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label" style={{ fontSize: '0.75rem' }}>Número de Teléfono</label>
+                  <input
+                    type="text"
+                    placeholder="Ej. 0412-1234567"
+                    value={userFormData.phone}
+                    onChange={(e) => setUserFormData(prev => ({ ...prev, phone: e.target.value }))}
+                    className="form-control"
+                    style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
+                  />
+                </div>
+
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label" style={{ fontSize: '0.75rem' }}>Correo Electrónico</label>
+                  <input
+                    type="email"
+                    placeholder="Ej. usuario@gmail.com"
+                    value={userFormData.email}
+                    onChange={(e) => setUserFormData(prev => ({ ...prev, email: e.target.value }))}
+                    className="form-control"
+                    style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
+                  />
+                </div>
+
+                <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label" style={{ fontSize: '0.75rem' }}>Rol Administrativo</label>
-                  <select 
+                  <select
                     value={userFormData.role}
                     onChange={(e) => setUserFormData(prev => ({ ...prev, role: e.target.value }))}
                     className="form-control"
@@ -796,15 +1138,30 @@ export default function CoordinatorDashboard({ user, token }) {
                 {userFormData.role === 'student' && (
                   <>
                     <div className="form-group" style={{ marginBottom: 0 }}>
-                      <label className="form-label" style={{ fontSize: '0.75rem' }}>Tutor Asignado</label>
-                      <select 
+                      <label className="form-label" style={{ fontSize: '0.75rem' }}>Tutor Académico</label>
+                      <select
                         value={userFormData.tutor_id}
                         onChange={(e) => setUserFormData(prev => ({ ...prev, tutor_id: e.target.value }))}
                         className="form-control"
                         style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', cursor: 'pointer' }}
                       >
                         <option value="">No Asignado</option>
-                        {tutors.map(t => (
+                        {academicTutors.map(t => (
+                          <option key={t.id} value={t.id}>{t.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label" style={{ fontSize: '0.75rem' }}>Tutor Institucional</label>
+                      <select
+                        value={userFormData.tutor_institucional_id}
+                        onChange={(e) => setUserFormData(prev => ({ ...prev, tutor_institucional_id: e.target.value }))}
+                        className="form-control"
+                        style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', cursor: 'pointer' }}
+                      >
+                        <option value="">No Asignado</option>
+                        {institutionalTutors.map(t => (
                           <option key={t.id} value={t.id}>{t.name}</option>
                         ))}
                       </select>
@@ -812,8 +1169,8 @@ export default function CoordinatorDashboard({ user, token }) {
 
                     <div className="form-group" style={{ marginBottom: 0 }}>
                       <label className="form-label" style={{ fontSize: '0.75rem' }}>Título del Proyecto</label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         placeholder="Ej. Sistema de Control Comunitario"
                         value={userFormData.project_title}
                         onChange={(e) => setUserFormData(prev => ({ ...prev, project_title: e.target.value }))}
@@ -825,8 +1182,8 @@ export default function CoordinatorDashboard({ user, token }) {
 
                     <div className="form-group" style={{ marginBottom: 0 }}>
                       <label className="form-label" style={{ fontSize: '0.75rem' }}>Comunidad del Proyecto</label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         placeholder="Ej. Sector Central Las Flores"
                         value={userFormData.project_community}
                         onChange={(e) => setUserFormData(prev => ({ ...prev, project_community: e.target.value }))}
@@ -838,8 +1195,8 @@ export default function CoordinatorDashboard({ user, token }) {
 
                     <div className="form-group" style={{ marginBottom: 0, justifyContent: 'center', minHeight: '38px' }}>
                       <label className="form-label" style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', height: '100%' }}>
-                        <input 
-                          type="checkbox" 
+                        <input
+                          type="checkbox"
                           checked={userFormData.docs_submitted}
                           onChange={(e) => setUserFormData(prev => ({ ...prev, docs_submitted: e.target.checked }))}
                           style={{ cursor: 'pointer', margin: 0 }}
@@ -853,7 +1210,7 @@ export default function CoordinatorDashboard({ user, token }) {
                 {userFormData.role === 'tutor' && (
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label className="form-label" style={{ fontSize: '0.75rem' }}>Tipo de Tutor</label>
-                    <select 
+                    <select
                       value={userFormData.tutor_type}
                       onChange={(e) => setUserFormData(prev => ({ ...prev, tutor_type: e.target.value }))}
                       className="form-control"
@@ -867,9 +1224,9 @@ export default function CoordinatorDashboard({ user, token }) {
 
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label" style={{ fontSize: '0.75rem' }}>Contraseña</label>
-                  <input 
-                    type="password" 
-                    placeholder={editingUser ? "Sin cambios si se deja vacío" : "Por defecto: unefa123"}
+                  <input
+                    type="password"
+                    placeholder={editingUser ? "Nueva contraseña (mín. 1 mayús, 1 minús, 1 núm, 1 car. esp.) o dejar vacío" : "Por defecto: Unefa123*"}
                     value={userFormData.password}
                     onChange={(e) => setUserFormData(prev => ({ ...prev, password: e.target.value }))}
                     className="form-control"
@@ -882,13 +1239,13 @@ export default function CoordinatorDashboard({ user, token }) {
                     {editingUser ? 'Actualizar' : 'Registrar'}
                   </button>
                   {editingUser && (
-                    <button 
-                      type="button" 
-                      className="btn-secondary" 
+                    <button
+                      type="button"
+                      className="btn-secondary"
                       style={{ padding: '0.45rem 0.8rem', fontSize: '0.85rem' }}
                       onClick={() => {
                         setEditingUser(null);
-                        setUserFormData({ name: '', identification: '', major: '', role: 'student', tutor_id: '', password: '', project_title: '', project_community: '', tutor_type: 'académico', docs_submitted: false });
+                        setUserFormData({ name: '', identification: '', major: '', role: 'student', tutor_id: '', tutor_institucional_id: '', password: '', project_title: '', project_community: '', tutor_type: 'académico', docs_submitted: false, phone: '', email: '' });
                       }}
                     >
                       X
@@ -925,7 +1282,15 @@ export default function CoordinatorDashboard({ user, token }) {
 
                     return (
                       <tr key={u.id} style={{ opacity: u.active ? 1 : 0.5 }}>
-                        <td data-label="Nombre" style={{ fontWeight: 700, color: 'var(--unefa-navy)' }}>{u.name}</td>
+                        <td data-label="Nombre" style={{ fontWeight: 700, color: 'var(--unefa-navy)' }}>
+                          <div>{u.name}</div>
+                          {(u.phone || u.email) && (
+                            <div style={{ fontSize: '0.72rem', fontWeight: 'normal', color: '#64748B', marginTop: '0.2rem', display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
+                              {u.phone && <span><i className="fa-solid fa-phone" style={{ fontSize: '0.65rem', marginRight: '3px' }}></i> {u.phone}</span>}
+                              {u.email && <span><i className="fa-solid fa-envelope" style={{ fontSize: '0.65rem', marginRight: '3px' }}></i> {u.email}</span>}
+                            </div>
+                          )}
+                        </td>
                         <td data-label="Cédula">{u.identification}</td>
                         <td data-label="Carrera">{u.major}</td>
                         <td data-label="Rol">
@@ -948,9 +1313,9 @@ export default function CoordinatorDashboard({ user, token }) {
                           </span>
                         </td>
                         <td data-label="Estado">
-                          <span style={{ 
-                            fontSize: '0.75rem', 
-                            fontWeight: 'bold', 
+                          <span style={{
+                            fontSize: '0.75rem',
+                            fontWeight: 'bold',
                             color: u.active ? 'var(--status-approved)' : 'var(--status-correct)',
                             background: u.active ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
                             padding: '0.2rem 0.6rem',
@@ -961,18 +1326,18 @@ export default function CoordinatorDashboard({ user, token }) {
                         </td>
                         <td data-label="Acciones">
                           <div style={{ display: 'flex', gap: '0.4rem' }}>
-                            <button 
-                              className="btn-secondary" 
+                            <button
+                              className="btn-secondary"
                               style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', borderRadius: '4px' }}
                               onClick={() => handleStartEditUser(u)}
                             >
                               <i className="fa-solid fa-pen"></i>
                             </button>
-                            <button 
+                            <button
                               className={u.active ? "btn-danger" : "btn-primary"}
-                              style={{ 
-                                padding: '0.25rem 0.5rem', 
-                                fontSize: '0.75rem', 
+                              style={{
+                                padding: '0.25rem 0.5rem',
+                                fontSize: '0.75rem',
                                 borderRadius: '4px',
                                 background: u.active ? 'var(--status-correct)' : 'var(--status-approved)'
                               }}
@@ -1005,7 +1370,7 @@ export default function CoordinatorDashboard({ user, token }) {
                 <label className="form-label" style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--unefa-navy)' }}>
                   Seleccione el Proyecto Comunitario
                 </label>
-                <select 
+                <select
                   className="form-control"
                   value={selectedGanttProject}
                   onChange={(e) => setSelectedGanttProject(e.target.value)}
@@ -1032,10 +1397,10 @@ export default function CoordinatorDashboard({ user, token }) {
 
       {/* Modal de Acta de Aprobación (Renderizado único a nivel raíz de dashboard) */}
       {mostrarModal && (
-        <ActaModal 
-          projectId={proyectoSeleccionado} 
+        <ActaModal
+          projectId={proyectoSeleccionado}
           formato={actaFormats[proyectoSeleccionado] || 'horizontal'}
-          onClose={() => setMostrarModal(false)} 
+          onClose={() => setMostrarModal(false)}
         />
       )}
 

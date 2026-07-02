@@ -43,10 +43,10 @@ router.get('/estudiante', verifyToken, async (req, res) => {
 // 2. Registrar nueva actividad
 router.post('/', verifyToken, async (req, res) => {
   const studentId = req.user.id;
-  const { activity_date, hours_spent, description, physical_attendance, spokesperson_name, spokesperson_phone, sworn_statement } = req.body;
+  const { activity_date, hours_spent, description, physical_attendance, sworn_statement, actividad_id } = req.body;
 
-  if (!activity_date || !hours_spent || !description || !spokesperson_name || !spokesperson_phone || sworn_statement === undefined) {
-    return res.status(400).json({ error: 'Todos los campos son obligatorios y debe aceptar la declaración jurada.' });
+  if (!activity_date || !hours_spent || !description || sworn_statement === undefined || !actividad_id) {
+    return res.status(400).json({ error: 'Todos los campos (incluyendo la actividad del cronograma) son obligatorios y debe aceptar la declaración jurada.' });
   }
 
   const hours = parseInt(hours_spent);
@@ -60,10 +60,10 @@ router.post('/', verifyToken, async (req, res) => {
 
   try {
     const result = await pool.query(
-      `INSERT INTO activities (student_id, activity_date, hours_spent, description, physical_attendance, spokesperson_name, spokesperson_phone, sworn_statement, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')
+      `INSERT INTO activities (student_id, activity_date, hours_spent, description, physical_attendance, sworn_statement, status, schedule_activity_id)
+       VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7)
        RETURNING *`,
-      [studentId, activity_date, hours, description, !!physical_attendance, spokesperson_name, spokesperson_phone, true]
+      [studentId, activity_date, hours, description, !!physical_attendance, true, actividad_id]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -75,10 +75,10 @@ router.post('/', verifyToken, async (req, res) => {
 router.put('/:id', verifyToken, async (req, res) => {
   const studentId = req.user.id;
   const { id } = req.params;
-  const { activity_date, hours_spent, description, physical_attendance, spokesperson_name, spokesperson_phone, sworn_statement } = req.body;
+  const { activity_date, hours_spent, description, physical_attendance, sworn_statement, actividad_id } = req.body;
 
-  if (!activity_date || !hours_spent || !description || !spokesperson_name || !spokesperson_phone || sworn_statement === undefined) {
-    return res.status(400).json({ error: 'Todos los campos son obligatorios.' });
+  if (!activity_date || !hours_spent || !description || sworn_statement === undefined || !actividad_id) {
+    return res.status(400).json({ error: 'Todos los campos (incluyendo la actividad del cronograma) son obligatorios.' });
   }
 
   const hours = parseInt(hours_spent);
@@ -97,9 +97,9 @@ router.put('/:id', verifyToken, async (req, res) => {
 
     const result = await pool.query(
       `UPDATE activities 
-       SET activity_date = $1, hours_spent = $2, description = $3, physical_attendance = $4, spokesperson_name = $5, spokesperson_phone = $6, sworn_statement = $7, status = 'pending', updated_at = CURRENT_TIMESTAMP
-       WHERE id = $8 RETURNING *`,
-      [activity_date, hours, description, !!physical_attendance, spokesperson_name, spokesperson_phone, !!sworn_statement, id]
+       SET activity_date = $1, hours_spent = $2, description = $3, physical_attendance = $4, sworn_statement = $5, schedule_activity_id = $6, status = 'pending', updated_at = CURRENT_TIMESTAMP
+       WHERE id = $7 RETURNING *`,
+      [activity_date, hours, description, !!physical_attendance, !!sworn_statement, actividad_id, id]
     );
     res.json(result.rows[0]);
   } catch (err) {
