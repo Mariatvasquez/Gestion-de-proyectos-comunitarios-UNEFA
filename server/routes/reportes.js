@@ -59,6 +59,16 @@ router.post('/', verifyToken, async (req, res) => {
   }
 
   try {
+    // Verificar si ya completó las 120 horas
+    const hoursCheck = await pool.query(
+      "SELECT COALESCE(SUM(hours_spent), 0) AS approved_hours FROM activities WHERE student_id = $1 AND status = 'approved'",
+      [studentId]
+    );
+    const approvedHours = parseInt(hoursCheck.rows[0].approved_hours) || 0;
+    if (approvedHours >= 120) {
+      return res.status(400).json({ error: 'Felicidades, ya ha cumplido con las 120 horas reglamentarias de servicio comunitario.' });
+    }
+
     const result = await pool.query(
       `INSERT INTO activities (student_id, activity_date, hours_spent, description, physical_attendance, sworn_statement, status, schedule_activity_id)
        VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7)

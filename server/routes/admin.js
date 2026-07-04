@@ -93,6 +93,9 @@ router.post('/usuarios', async (req, res) => {
 
     res.status(201).json(result.rows[0]);
   } catch (err) {
+    if (err.code === '23505') {
+      return res.status(400).json({ error: 'Esta cédula ya se encuentra registrada.' });
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -182,6 +185,9 @@ router.put('/usuarios/:id', async (req, res) => {
 
     res.json(result.rows[0]);
   } catch (err) {
+    if (err.code === '23505') {
+      return res.status(400).json({ error: 'Esta cédula ya se encuentra registrada.' });
+    }
     res.status(500).json({ error: err.message });
   }
 });

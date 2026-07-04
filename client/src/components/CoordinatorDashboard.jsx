@@ -60,6 +60,8 @@ export default function CoordinatorDashboard({ user, token }) {
   const [histUploadError, setHistUploadError] = useState('');
   const [histUploadSuccess, setHistUploadSuccess] = useState('');
   const [histUploading, setHistUploading] = useState(false);
+  const [editingHistProject, setEditingHistProject] = useState(null);
+  const [userDocType, setUserDocType] = useState('V');
 
 
   const toggleCoordProject = (pid) => {
@@ -141,6 +143,9 @@ export default function CoordinatorDashboard({ user, token }) {
       // Si es un nuevo usuario y no se especifica contraseña, usar "Unefa123*" por defecto
       const submitPassword = userFormData.password.trim() || (editingUser ? '' : 'Unefa123*');
 
+      // Concatenar el prefijo a la identificación
+      const finalIdentification = `${userDocType}-${userFormData.identification.trim()}`;
+
       const res = await fetch(url, {
         method,
         headers: {
@@ -149,6 +154,7 @@ export default function CoordinatorDashboard({ user, token }) {
         },
         body: JSON.stringify({
           ...userFormData,
+          identification: finalIdentification,
           password: submitPassword,
           tutor_id: userFormData.tutor_id ? parseInt(userFormData.tutor_id) : null,
           tutor_institucional_id: userFormData.tutor_institucional_id ? parseInt(userFormData.tutor_institucional_id) : null
@@ -158,12 +164,16 @@ export default function CoordinatorDashboard({ user, token }) {
       const result = await res.json();
 
       if (!res.ok) {
+        if (result.error && (result.error.includes('registrada') || result.error.includes('exist'))) {
+          alert('Esta cédula ya se encuentra registrada');
+        }
         setUserFormError(result.error || 'Error al guardar el usuario.');
         return;
       }
 
       setUserFormSuccess(editingUser ? '✅ Usuario actualizado con éxito.' : `✅ Usuario creado con éxito. Contraseña por defecto: ${submitPassword}`);
       setUserFormData({ name: '', identification: '', major: '', role: 'student', tutor_id: '', tutor_institucional_id: '', password: '', project_title: '', project_community: '', tutor_type: 'académico', docs_submitted: false, phone: '', email: '' });
+      setUserDocType('V');
       setEditingUser(null);
       loadData();
     } catch (err) {
@@ -212,9 +222,17 @@ export default function CoordinatorDashboard({ user, token }) {
   // Cargar usuario para edición
   const handleStartEditUser = (u) => {
     setEditingUser(u);
+    let prefix = 'V';
+    let number = u.identification;
+    if (u.identification && u.identification.includes('-')) {
+      const parts = u.identification.split('-');
+      prefix = parts[0];
+      number = parts.slice(1).join('-');
+    }
+    setUserDocType(prefix);
     setUserFormData({
       name: u.name,
-      identification: u.identification,
+      identification: number,
       major: u.major,
       role: u.role,
       tutor_id: u.tutor_id ? u.tutor_id.toString() : '',
@@ -273,6 +291,41 @@ export default function CoordinatorDashboard({ user, token }) {
     }
   };
 
+  const handleCancelEditHist = () => {
+    setEditingHistProject(null);
+    setNewHistFormData({
+      title: '',
+      major: '',
+      academic_year: new Date().getFullYear(),
+      community: '',
+      summary: ''
+    });
+    setHistFile(null);
+    const fileInput = document.getElementById('hist-file-input');
+    if (fileInput) fileInput.value = '';
+    setHistUploadError('');
+    setHistUploadSuccess('');
+  };
+
+  const handleStartEditHist = (proj) => {
+    setEditingHistProject(proj);
+    setNewHistFormData({
+      title: proj.title || '',
+      major: proj.major || '',
+      academic_year: proj.academic_year || new Date().getFullYear(),
+      community: proj.community || '',
+      summary: proj.summary || ''
+    });
+    setHistFile(null);
+    const fileInput = document.getElementById('hist-file-input');
+    if (fileInput) fileInput.value = '';
+
+    const formElement = document.getElementById('hist-form-container');
+    if (formElement) {
+      formElement.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   const handleHistSubmit = async (e) => {
     e.preventDefault();
     setHistUploadError('');
@@ -280,6 +333,12 @@ export default function CoordinatorDashboard({ user, token }) {
 
     if (!newHistFormData.title || !newHistFormData.major || !newHistFormData.academic_year) {
       setHistUploadError('El título, la carrera y el año académico son obligatorios.');
+      return;
+    }
+
+    if (!editingHistProject && !histFile) {
+      alert('Debe agregar un documento PDF');
+      setHistUploadError('Debe agregar un documento PDF');
       return;
     }
 
@@ -296,8 +355,13 @@ export default function CoordinatorDashboard({ user, token }) {
     }
 
     try {
-      const res = await fetch(`${API_BASE}/proyectos-historicos`, {
-        method: 'POST',
+      const url = editingHistProject
+        ? `${API_BASE}/proyectos-historicos/${editingHistProject.id}`
+        : `${API_BASE}/proyectos-historicos`;
+      const method = editingHistProject ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method: method,
         headers: {
           'Authorization': `Bearer ${token}`
         },
@@ -309,17 +373,13 @@ export default function CoordinatorDashboard({ user, token }) {
         throw new Error(result.error || 'Error al guardar el proyecto histórico.');
       }
 
-      setHistUploadSuccess('✅ Proyecto histórico registrado exitosamente en el repositorio.');
-      setNewHistFormData({
-        title: '',
-        major: '',
-        academic_year: new Date().getFullYear(),
-        community: '',
-        summary: ''
-      });
-      setHistFile(null);
-      const fileInput = document.getElementById('hist-file-input');
-      if (fileInput) fileInput.value = '';
+      setHistUploadSuccess(
+        editingHistProject
+          ? '✅ Proyecto histórico actualizado exitosamente.'
+          : '✅ Proyecto histórico registrado exitosamente en el repositorio.'
+      );
+
+      handleCancelEditHist();
 
       // Recargar datos
       loadData();
@@ -811,10 +871,10 @@ export default function CoordinatorDashboard({ user, token }) {
               </div>
 
               {/* Formulario para registrar nuevo proyecto histórico con PDF */}
-              <div style={{ background: 'rgba(12, 35, 64, 0.02)', border: '1.5px dashed rgba(197, 160, 89, 0.4)', borderRadius: '12px', padding: '1.5rem' }}>
+              <div id="hist-form-container" style={{ background: 'rgba(12, 35, 64, 0.02)', border: '1.5px dashed rgba(197, 160, 89, 0.4)', borderRadius: '12px', padding: '1.5rem' }}>
                 <h4 style={{ fontSize: '0.95rem', color: 'var(--unefa-navy)', marginBottom: '1rem', fontWeight: 700 }}>
-                  <i className="fa-solid fa-plus" style={{ color: 'var(--unefa-gold)', marginRight: '0.5rem' }}></i>
-                  Registrar Nuevo Proyecto Histórico (Cargar PDF)
+                  <i className={`fa-solid ${editingHistProject ? 'fa-pen-to-square' : 'fa-plus'}`} style={{ color: 'var(--unefa-gold)', marginRight: '0.5rem' }}></i>
+                  {editingHistProject ? '✏️ Editar Proyecto Histórico (Cargar nuevo PDF es opcional)' : 'Registrar Nuevo Proyecto Histórico (Cargar PDF)'}
                 </h4>
 
                 {histUploadError && (
@@ -899,14 +959,14 @@ export default function CoordinatorDashboard({ user, token }) {
                       type="file"
                       accept=".pdf"
                       onChange={(e) => {
-                        const file = e.target.files[0];
-                        if (file && file.type !== 'application/pdf') {
-                          alert('Únicamente se permiten archivos en formato PDF.');
-                          e.target.value = '';
-                          setHistFile(null);
-                        } else {
-                          setHistFile(file);
-                        }
+                         const file = e.target.files[0];
+                         if (file && file.type !== 'application/pdf') {
+                           alert('Únicamente se permiten archivos en formato PDF.');
+                           e.target.value = '';
+                           setHistFile(null);
+                         } else {
+                           setHistFile(file);
+                         }
                       }}
                       style={{
                         fontSize: '0.8rem',
@@ -920,22 +980,35 @@ export default function CoordinatorDashboard({ user, token }) {
                     />
                   </div>
 
-                  <button
-                    type="submit"
-                    className="btn-accent"
-                    style={{ padding: '0.5rem 1.2rem', fontSize: '0.85rem', height: '38px', justifyContent: 'center', width: '100%' }}
-                    disabled={histUploading}
-                  >
-                    {histUploading ? (
-                      <>
-                        <i className="fa-solid fa-circle-notch fa-spin"></i> Registrando...
-                      </>
-                    ) : (
-                      <>
-                        <i className="fa-solid fa-circle-plus"></i> Registrar Proyecto
-                      </>
+                  <div style={{ display: 'flex', gap: '0.5rem', width: '100%' }}>
+                    <button
+                      type="submit"
+                      className="btn-accent"
+                      style={{ padding: '0.5rem 1.2rem', fontSize: '0.85rem', height: '38px', justifyContent: 'center', flex: 1 }}
+                      disabled={histUploading}
+                    >
+                      {histUploading ? (
+                        <>
+                          <i className="fa-solid fa-circle-notch fa-spin"></i> Guardando...
+                        </>
+                      ) : (
+                        <>
+                          <i className={`fa-solid ${editingHistProject ? 'fa-floppy-disk' : 'fa-circle-plus'}`}></i> {editingHistProject ? 'Guardar Cambios' : 'Registrar Proyecto'}
+                        </>
+                      )}
+                    </button>
+                    {editingHistProject && (
+                      <button
+                        type="button"
+                        onClick={handleCancelEditHist}
+                        className="btn-secondary"
+                        style={{ padding: '0.5rem 1.2rem', fontSize: '0.85rem', height: '38px', justifyContent: 'center', flex: 1, background: '#EF4444', color: 'white', borderColor: '#EF4444' }}
+                        disabled={histUploading}
+                      >
+                        <i className="fa-solid fa-xmark"></i> Cancelar
+                      </button>
                     )}
-                  </button>
+                  </div>
                 </form>
               </div>
 
@@ -976,8 +1049,8 @@ export default function CoordinatorDashboard({ user, token }) {
                         )}
                       </div>
 
-                      {proj.ruta_archivo && (
-                        <div style={{ marginTop: '0.5rem' }}>
+                      <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        {proj.ruta_archivo && (
                           <a
                             href={`${BACKEND_URL}/${proj.ruta_archivo}`}
                             target="_blank"
@@ -997,8 +1070,28 @@ export default function CoordinatorDashboard({ user, token }) {
                             <i className="fa-solid fa-arrow-up-right-from-square"></i>
                             Ver PDF
                           </a>
-                        </div>
-                      )}
+                        )}
+                        <button
+                          onClick={() => handleStartEditHist(proj)}
+                          className="btn-secondary"
+                          style={{
+                            padding: '0.35rem 0.8rem',
+                            fontSize: '0.78rem',
+                            borderRadius: '6px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.3rem',
+                            boxShadow: 'none',
+                            background: '#E2E8F0',
+                            color: 'var(--unefa-navy)',
+                            border: 'none',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <i className="fa-solid fa-pen-to-square"></i>
+                          Editar
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1073,15 +1166,35 @@ export default function CoordinatorDashboard({ user, token }) {
 
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label" style={{ fontSize: '0.75rem' }}>Cédula de Identidad</label>
-                  <input
-                    type="text"
-                    placeholder="Ej. V-25123456"
-                    value={userFormData.identification}
-                    onChange={(e) => setUserFormData(prev => ({ ...prev, identification: e.target.value }))}
-                    className="form-control"
-                    style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
-                    required
-                  />
+                  <div style={{ display: 'flex', gap: '0.4rem' }}>
+                    <select
+                      value={userDocType}
+                      onChange={(e) => setUserDocType(e.target.value)}
+                      className="form-control"
+                      style={{
+                        width: '70px',
+                        padding: '0.4rem 0.5rem',
+                        fontSize: '0.85rem',
+                        background: 'white',
+                        border: '1px solid #CBD5E1',
+                        borderRadius: '8px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <option value="V">V</option>
+                      <option value="E">E</option>
+                      <option value="P">P</option>
+                    </select>
+                    <input
+                      type="text"
+                      placeholder="Ej. 25123456"
+                      value={userFormData.identification}
+                      onChange={(e) => setUserFormData(prev => ({ ...prev, identification: e.target.value }))}
+                      className="form-control"
+                      style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', flex: 1 }}
+                      required
+                    />
+                  </div>
                 </div>
 
                 <div className="form-group" style={{ marginBottom: 0 }}>
@@ -1245,6 +1358,7 @@ export default function CoordinatorDashboard({ user, token }) {
                       style={{ padding: '0.45rem 0.8rem', fontSize: '0.85rem' }}
                       onClick={() => {
                         setEditingUser(null);
+                        setUserDocType('V');
                         setUserFormData({ name: '', identification: '', major: '', role: 'student', tutor_id: '', tutor_institucional_id: '', password: '', project_title: '', project_community: '', tutor_type: 'académico', docs_submitted: false, phone: '', email: '' });
                       }}
                     >

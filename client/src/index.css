@@ -516,35 +516,36 @@ h1, h2, h3, h4, h5, h6 {
     border: none;
     border-bottom: 1px solid rgba(226, 232, 240, 0.6); 
     position: relative;
-    padding-left: 45%; 
-    text-align: right;
-    padding-top: 0.75rem;
-    padding-bottom: 0.75rem;
-    min-height: 42px;
+    padding: 0.6rem 0.8rem;
+    text-align: left;
     display: flex;
-    justify-content: flex-end;
-    align-items: center;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    min-height: 42px;
+    gap: 0.15rem;
   }
   
   .premium-table td:last-child {
     border-bottom: none;
+    padding-top: 0.8rem;
     padding-bottom: 0.5rem;
-    justify-content: center;
-    padding-left: 0;
+    align-items: stretch;
+    width: 100%;
   }
   
   .premium-table td:before { 
-    position: absolute;
-    left: 1rem;
-    width: 40%; 
-    padding-right: 10px; 
+    position: static;
+    width: auto; 
+    padding-right: 0; 
     white-space: nowrap;
     text-align: left;
-    font-weight: bold;
+    font-weight: 700;
     color: var(--unefa-navy);
     content: attr(data-label);
     font-family: var(--font-header);
-    font-size: 0.85rem;
+    font-size: 0.78rem;
+    opacity: 0.8;
   }
 
   /* Ajustar grids generales en celulares para que apilen de forma vertical */

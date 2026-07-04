@@ -1,9 +1,13 @@
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Asegurar que el directorio de uploads/historico exista
-const uploadDir = path.join(process.cwd(), 'uploads', 'historico');
+const uploadDir = path.join(__dirname, '..', 'uploads', 'historico');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }

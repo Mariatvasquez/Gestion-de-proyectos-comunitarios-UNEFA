@@ -98,6 +98,20 @@ export default function StudentDashboard({ user, token }) {
     setFormError('');
     setFormSuccess('');
 
+    // Validación de campos vacíos
+    if (!formData.activity_date || !formData.hours_spent || !formData.actividad_id || !formData.description) {
+      alert('Por favor, llene todos los campos requeridos');
+      setFormError('Por favor, llene todos los campos requeridos');
+      return;
+    }
+
+    // Validación de límite de 120 horas
+    if (summary.approved >= 120) {
+      alert('Felicidades, ya ha cumplido con las 120 horas reglamentarias de servicio comunitario.');
+      setFormError('Felicidades, ya ha cumplido con las 120 horas reglamentarias de servicio comunitario.');
+      return;
+    }
+
     // Validaciones
     const hours = parseInt(formData.hours_spent);
     if (isNaN(hours) || hours < 1 || hours > 8) {
@@ -268,6 +282,25 @@ export default function StudentDashboard({ user, token }) {
             </div>
           )}
 
+          {summary.approved >= 120 && (
+            <div style={{
+              background: 'rgba(16, 185, 129, 0.15)',
+              color: '#065F46',
+              padding: '1rem',
+              borderRadius: '12px',
+              borderLeft: '5px solid #10B981',
+              marginBottom: '1rem',
+              fontWeight: 'bold',
+              fontSize: '0.9rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.6rem'
+            }}>
+              <i className="fa-solid fa-trophy" style={{ fontSize: '1.2rem', color: '#F59E0B' }}></i>
+              <span>Felicidades, ya ha cumplido con las 120 horas reglamentarias de servicio comunitario.</span>
+            </div>
+          )}
+
           <form onSubmit={handleSubmitActivity}>
             <div className="form-group">
               <label className="form-label">Fecha de Actividad</label>
@@ -278,6 +311,7 @@ export default function StudentDashboard({ user, token }) {
                 onChange={handleInputChange} 
                 className="form-control" 
                 required 
+                disabled={summary.approved >= 120}
               />
             </div>
 
@@ -293,6 +327,7 @@ export default function StudentDashboard({ user, token }) {
                 placeholder="1 a 8 horas"
                 className="form-control" 
                 required 
+                disabled={summary.approved >= 120}
               />
             </div>
 
@@ -304,6 +339,7 @@ export default function StudentDashboard({ user, token }) {
                 onChange={handleInputChange} 
                 className="form-control" 
                 required 
+                disabled={summary.approved >= 120}
               >
                 <option value="">-- Seleccione a qué actividad corresponde --</option>
                 {projectSchedule.map(item => (
@@ -325,13 +361,18 @@ export default function StudentDashboard({ user, token }) {
                 className="form-control" 
                 required
                 style={{ resize: 'none' }}
+                disabled={summary.approved >= 120}
               ></textarea>
             </div>
 
             {/* Asistencia Física Switch */}
             <div 
               className={`switch-container ${formData.physical_attendance ? 'active' : ''}`}
-              onClick={() => setFormData(prev => ({ ...prev, physical_attendance: !prev.physical_attendance }))}
+              onClick={() => {
+                if (summary.approved >= 120) return;
+                setFormData(prev => ({ ...prev, physical_attendance: !prev.physical_attendance }));
+              }}
+              style={{ opacity: summary.approved >= 120 ? 0.6 : 1, cursor: summary.approved >= 120 ? 'not-allowed' : 'pointer' }}
             >
               <div className="switch-track">
                 <div className="switch-thumb"></div>
@@ -339,16 +380,15 @@ export default function StudentDashboard({ user, token }) {
               <span className="form-label" style={{ margin: 0 }}>Asistencia Física Comunal (Presencial)</span>
             </div>
 
-
-
             {/* Declaración Jurada */}
-            <label style={{ display: 'flex', gap: '0.6rem', cursor: 'pointer', margin: '1rem 0', fontSize: '0.8rem', lineHeight: '1.4', fontWeight: 500 }}>
+            <label style={{ display: 'flex', gap: '0.6rem', cursor: summary.approved >= 120 ? 'not-allowed' : 'pointer', margin: '1rem 0', fontSize: '0.8rem', lineHeight: '1.4', fontWeight: 500, opacity: summary.approved >= 120 ? 0.6 : 1 }}>
               <input 
                 type="checkbox" 
                 name="sworn_statement" 
                 checked={formData.sworn_statement} 
                 onChange={handleInputChange} 
                 style={{ width: '16px', height: '16px', accentColor: 'var(--unefa-navy)', marginTop: '2px' }}
+                disabled={summary.approved >= 120}
               />
               <span>Declaro bajo juramento que los datos suministrados son verídicos y corresponden a actividades de servicio comunitario.</span>
             </label>
@@ -357,7 +397,7 @@ export default function StudentDashboard({ user, token }) {
               type="submit" 
               className={editingActivity ? "btn-accent" : "btn-primary"} 
               style={{ width: '100%', justifyContent: 'center' }}
-              disabled={!formData.sworn_statement}
+              disabled={summary.approved >= 120 || !formData.sworn_statement}
             >
               <i className="fa-solid fa-paper-plane"></i>
               {editingActivity ? 'Enviar Corrección' : 'Registrar Bitácora'}
