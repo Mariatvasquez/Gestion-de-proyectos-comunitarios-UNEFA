@@ -4,7 +4,7 @@ import ProjectSchedule from './ProjectSchedule';
 import ProjectHistory from './ProjectHistory';
 
 const API_BASE = 'https://api-control-sc-unefa.onrender.com/api';
-const BACKEND_URL = API_BASE.replace('/api', '');
+const BACKEND_URL = API_BASE.replace(/\/api$/, '');
 
 export default function CoordinatorDashboard({ user, token }) {
   const [stats, setStats] = useState({ activeStudents: 0, activeProjects: 0, completedStudents: 0 });

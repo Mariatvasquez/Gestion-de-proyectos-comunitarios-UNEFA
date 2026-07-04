@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
 const API_BASE = 'https://api-control-sc-unefa.onrender.com/api';
-const BACKEND_URL = API_BASE.replace('/api', '');
+const BACKEND_URL = API_BASE.replace(/\/api$/, '');
 
 export default function ProjectHistory({ projectId, token, readOnly = false }) {
   const [documents, setDocuments] = useState([]);
