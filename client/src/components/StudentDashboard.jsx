@@ -527,20 +527,13 @@ export default function StudentDashboard({ user, token }) {
       </div>
 
       {/* 3. Cronograma */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '2rem' }}>
-        
-        {/* Cronograma de Hitos */}
-        <div className="glass-panel" style={{ padding: '1.8rem' }}>
-          <h3 style={{ marginBottom: '1.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <i className="fa-solid fa-timeline" style={{ color: 'var(--unefa-gold)' }}></i>
-            Visor del Cronograma Académico
-          </h3>
+      <div className="glass-panel" style={{ padding: '1.8rem', display: 'flex', flexDirection: 'column', gap: '1.2rem', marginTop: '0.5rem' }}>
+        <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.2rem' }}>
+          <i className="fa-solid fa-calendar-days" style={{ color: 'var(--unefa-gold)' }}></i>
+          Cronograma de Actividades
+        </h3>
 
-          <ProjectSchedule projectId={user.project_id || 'fase_inicial'} token={token} readOnly={true} />
-        </div>
-
-
-
+        <ProjectSchedule projectId={user.project_id || 'fase_inicial'} token={token} readOnly={true} />
       </div>
 
       {/* 4. Repositorio de Proyectos Históricos */}
