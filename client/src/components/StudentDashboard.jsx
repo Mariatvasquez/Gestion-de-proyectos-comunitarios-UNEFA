@@ -204,10 +204,10 @@ export default function StudentDashboard({ user, token }) {
   }
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+    <div className="dashboard-container">
       
       {/* 1. Header con Información y Progreso */}
-      <div className="glass-panel" style={{ padding: '2rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', alignItems: 'center' }}>
+      <div className="glass-panel dashboard-header">
         <div>
           <span style={{ color: 'var(--unefa-gold)', fontWeight: 700, fontFamily: 'var(--font-header)', textTransform: 'uppercase', letterSpacing: '1px', fontSize: '0.85rem' }}>
             Panel General del Estudiante
@@ -222,7 +222,7 @@ export default function StudentDashboard({ user, token }) {
               {user.project_title ? `${user.project_title} (${user.project_community})` : 'Fase Inicial (Sin Proyecto Específico Asignado)'}
             </span>
           </div>
-          <div style={{ marginTop: '1.2rem', display: 'flex', gap: '1.5rem' }}>
+          <div className="hours-summary-container">
             <div style={{ background: 'rgba(12, 35, 64, 0.05)', padding: '0.8rem 1.2rem', borderRadius: '10px', textAlign: 'center' }}>
               <span style={{ display: 'block', fontSize: '1.5rem', fontWeight: '800', color: 'var(--status-approved)' }}>{summary.approved} hrs</span>
               <span style={{ fontSize: '0.75rem', fontWeight: '600', opacity: 0.8 }}>Aprobadas</span>
@@ -261,10 +261,10 @@ export default function StudentDashboard({ user, token }) {
       </div>
 
       {/* 2. Cuerpo: Formulario de Carga y Bitácoras */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.8fr', gap: '2rem' }}>
+      <div className="dashboard-body-grid">
         
         {/* Formulario de Carga de Actividad */}
-        <div className="glass-panel" style={{ padding: '1.8rem' }}>
+        <div className="glass-panel form-card">
           <h3 style={{ marginBottom: '1.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <i className="fa-solid fa-circle-plus" style={{ color: 'var(--unefa-gold)' }}></i>
             {editingActivity ? 'Editar y Reenviar' : 'Registrar Actividad'}
@@ -427,7 +427,7 @@ export default function StudentDashboard({ user, token }) {
         </div>
 
         {/* Historial de Bitácoras */}
-        <div className="glass-panel" style={{ padding: '1.8rem', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+        <div className="glass-panel history-card">
           <h3 style={{ display: 'flex', alignItems: 'center', justifySelf: 'flex-start', gap: '0.5rem' }}>
             <i className="fa-solid fa-list-check" style={{ color: 'var(--unefa-gold)' }}></i>
             Historial de Bitácoras
@@ -544,7 +544,7 @@ export default function StudentDashboard({ user, token }) {
       </div>
 
       {/* 4. Repositorio de Proyectos Históricos */}
-      <div className="glass-panel" style={{ padding: '1.8rem' }}>
+      <div className="glass-panel history-projects-card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
           <div>
             <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -554,7 +554,7 @@ export default function StudentDashboard({ user, token }) {
             <p style={{ fontSize: '0.85rem', opacity: 0.8 }}>Buscador interactivo en tiempo real para consultar trabajos anteriores aprobados por carrera.</p>
           </div>
 
-          <div style={{ position: 'relative', width: '300px' }}>
+          <div className="search-container">
             <input 
               type="text" 
               placeholder="Buscar por título, comunidad o carrera..." 
@@ -572,7 +572,7 @@ export default function StudentDashboard({ user, token }) {
             <p style={{ fontWeight: 600 }}>No se encontraron proyectos históricos con ese criterio.</p>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1rem' }}>
+          <div className="projects-grid">
             {filteredProjects.map(proj => (
               <div 
                 key={proj.id} 

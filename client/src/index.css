@@ -171,6 +171,8 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .form-control {
+  width: 100%;
+  box-sizing: border-box;
   padding: 0.75rem 1rem;
   border: 1.5px solid #CBD5E1;
   border-radius: var(--radius-sm);
@@ -551,6 +553,119 @@ h1, h2, h3, h4, h5, h6 {
   /* Ajustar grids generales en celulares para que apilen de forma vertical */
   div[style*="grid-template-columns"] {
     grid-template-columns: 1fr !important;
+  }
+}
+
+/* --- RESPONSIVE LAYOUTS FOR STUDENT DASHBOARD --- */
+.dashboard-container {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  width: 100%;
+}
+
+.dashboard-header {
+  padding: 2rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  align-items: center;
+}
+
+.hours-summary-container {
+  margin-top: 1.2rem;
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.dashboard-body-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1.8fr;
+  gap: 2rem;
+}
+
+.form-card {
+  padding: 1.8rem;
+  width: 100%;
+  max-width: 100%;
+}
+
+.history-card {
+  padding: 1.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+}
+
+.history-projects-card {
+  padding: 1.8rem;
+}
+
+.projects-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1rem;
+}
+
+.search-container {
+  position: relative;
+  width: 300px;
+}
+
+@media (max-width: 768px) {
+  .dashboard-container {
+    padding: 1rem;
+    gap: 1.2rem;
+  }
+
+  .dashboard-header {
+    grid-template-columns: 1fr;
+    padding: 1.2rem;
+    gap: 1.5rem;
+  }
+
+  .dashboard-body-grid {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  .form-card {
+    padding: 1.2rem;
+  }
+
+  .history-card {
+    padding: 1.2rem;
+  }
+
+  .history-projects-card {
+    padding: 1.2rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .search-container {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .hours-summary-container {
+    gap: 0.8rem;
+    justify-content: space-between;
+  }
+  
+  .hours-summary-container > div {
+    flex: 1 1 calc(50% - 0.8rem);
+    min-width: 100px;
+    padding: 0.6rem 0.8rem !important;
+  }
+
+  .projects-grid {
+    grid-template-columns: 1fr;
   }
 }
 
