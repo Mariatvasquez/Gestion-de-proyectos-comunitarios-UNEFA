@@ -333,8 +333,8 @@ export default function ProjectSchedule({ projectId, token, readOnly = false }) 
           <p style={{ fontSize: '0.8rem', margin: 0 }}>No hay actividades planificadas para este proyecto.</p>
         </div>
       ) : (
-        <div className="w-full overflow-x-auto pb-4 glass-panel" style={{ padding: '0.5rem', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.5)', background: 'rgba(255, 255, 255, 0.45)', backdropFilter: 'blur(10px)', boxShadow: 'var(--shadow-premium)' }}>
-          <table className="min-w-[800px]" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+        <div className="glass-panel" style={{ width: '100%', overflowX: 'auto', paddingBottom: '1rem', padding: '0.5rem', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.5)', background: 'rgba(255, 255, 255, 0.45)', backdropFilter: 'blur(10px)', boxShadow: 'var(--shadow-premium)' }}>
+          <table style={{ minWidth: '800px', width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
             <thead>
               <tr style={{ background: 'var(--unefa-navy)', color: 'white', borderBottom: '2px solid #E2E8F0' }}>
                 <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: 600, width: '22%' }}>Objetivo Específico</th>
