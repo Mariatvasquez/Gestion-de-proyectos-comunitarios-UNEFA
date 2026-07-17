@@ -669,3 +669,21 @@ h1, h2, h3, h4, h5, h6 {
   }
 }
 
+/* Tailwind compatibility utilities for responsive Gantt and tables */
+.w-full {
+  width: 100% !important;
+}
+.overflow-x-auto {
+  overflow-x: auto !important;
+}
+.pb-4 {
+  padding-bottom: 1rem !important;
+}
+.min-w-max {
+  min-width: max-content !important;
+}
+.min-w-\[800px\] {
+  min-width: 800px !important;
+}
+
+

@@ -210,7 +210,7 @@ export default function ProjectSchedule({ projectId, token, readOnly = false }) 
   const scheduleAgrupado = agruparCronograma(scheduleItems);
 
   return (
-    <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+    <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.2rem', maxWidth: '100%', overflow: 'hidden' }}>
 
       {/* Título de la sección */}
       <div style={{ borderTop: '2px solid #E2E8F0', paddingTop: '1.5rem' }}>
@@ -333,8 +333,8 @@ export default function ProjectSchedule({ projectId, token, readOnly = false }) 
           <p style={{ fontSize: '0.8rem', margin: 0 }}>No hay actividades planificadas para este proyecto.</p>
         </div>
       ) : (
-        <div style={{ overflowX: 'auto', border: '1px solid #E2E8F0', borderRadius: '8px', background: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem', minWidth: '850px' }}>
+        <div className="w-full overflow-x-auto pb-4 glass-panel" style={{ padding: '0.5rem', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.5)', background: 'rgba(255, 255, 255, 0.45)', backdropFilter: 'blur(10px)', boxShadow: 'var(--shadow-premium)' }}>
+          <table className="min-w-[800px]" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
             <thead>
               <tr style={{ background: 'var(--unefa-navy)', color: 'white', borderBottom: '2px solid #E2E8F0' }}>
                 <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: 600, width: '22%' }}>Objetivo Específico</th>
